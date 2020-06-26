@@ -40,7 +40,7 @@ char *comRx3[] = {
 };
 
 void *thread_push(void *arg){
-    icom_t *icom = icom_initPush((char*)arg, sizeof(int), 2);
+    icom_t *icom = icom_initPush((char*)arg, sizeof(int), 2, 0);
     icomBuffer_t *buff = icom_getCurrentBuffer(icom);
 
     for(int i=0; i<5; i++){
@@ -55,7 +55,7 @@ void *thread_push(void *arg){
 }
 
 void *thread_pull(void *arg){
-    icom_t *icom = icom_initPull((char*)arg, sizeof(int));
+    icom_t *icom = icom_initPull((char*)arg, sizeof(int), 0);
     icomBuffer_t *buff;
 
     for(int i=0; i<5; i++){
