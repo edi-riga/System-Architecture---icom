@@ -5,25 +5,38 @@
 #include <zmq.h>
 #include "icom.h"
 
+/* INFO */
 #define _I(fmt,args...)    printf(fmt "\n", ##args)
-#define _W(fmt,args...)    printf("WARNING: " fmt "\n", ##args)
+/* ERROR */
 #define _E(fmt,args...)    printf("ERROR: " fmt "\n", ##args)
+/* WARNING */
+#define _W(fmt,args...)    printf("WARNING: " fmt "\n", ##args)
+/* SYSTEM ERROR */
 #define _SE(fmt,args...)   printf("SYSTEM ERROR (%s): " fmt "\n", strerror(errno), ##args)
+/* SYSTEM WARNING  */
 #define _SW(fmt,args...)   printf("SYSTEM WARNING (%s): " fmt "\n", strerror(errno), ##args)
-#define _D(fmt,args...)    
-//printf("DEBUG: "fmt "\n", ##args); fflush(stdout)
 
-/* globals */
-static pthread_mutex_t lockGetContext;
+/* DEBUGGING */
+#if DEBUG
+    #define _D(fmt,args...)  printf("DEBUG: "fmt "\n", ##args); fflush(stdout)
+#else
+    #define _D(fmt,args...)    
+#endif
 
 
-/* internal data structures */
+/*************** Globals ***************/
+static void *zmqContext = NULL;        // single context per application
+static pthread_mutex_t lockGetContext; // used for thread save initialization
+
+
+/*************** Internal data structures ***************/
 enum {
     ICOM_TYPE_PUSH=0,
     ICOM_TYPE_PULL,
     ICOM_TYPE_PUB,
     ICOM_TYPE_SUB,
 };
+
 
 /*************** Communication string parser API ***************/
 #ifndef _GNU_SOURCE
@@ -100,8 +113,9 @@ void comStringClean(char ***strArray, unsigned strCount){
     free(*strArray);
 }
 
+
+/*************** ICOM ZMQ-based API ***************/
 /* Get (and create) ZMQ context */
-static void *zmqContext = NULL;
 static void *icom_getContext(){
 
     pthread_mutex_lock(&lockGetContext);
@@ -239,7 +253,7 @@ int icom_initBuffers(icomBuffer_t **buffers, unsigned bufferCount, unsigned buff
     return 0;
 }
 
-icom_t *icom_initPush(char *comString, unsigned bufferSize, unsigned bufferCount){
+icom_t *icom_initPush(char *comString, unsigned bufferSize, unsigned bufferCount, uint32_t flags){
 
     /* allocate and initialize icom structure */
     icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
@@ -260,7 +274,7 @@ icom_t *icom_initPush(char *comString, unsigned bufferSize, unsigned bufferCount
     return icom;
 }
 
-icom_t *icom_initPull(char *comString, unsigned bufferSize){
+icom_t *icom_initPull(char *comString, unsigned bufferSize, uint32_t flags){
 
     /* allocate and initialize icom structure */
     icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
@@ -324,6 +338,7 @@ icomBuffer_t *icom_doPush(icom_t *icom){
     for(int i=0; i<icom->socketCount; i++){
         icom_sendBuf(&(icom->sockets[i]), &(icom->buffers[icom->bufferIdx]));
 
+        /*  */
         //if(res == -1)
         //    _W("Message dropped");
     }

@@ -1,6 +1,8 @@
 #ifndef _ICOM_PUSH_H_
 #define _ICOM_PUSH_H_
 
+#include <stdint.h>
+
 /*@ struct Linked list of specialized icom buffers which are used to 
  *         implement simultanious operations of writing/reading buffers 
  *         by different threads */
@@ -38,9 +40,10 @@ typedef struct icom_t{
  *  @param comString   TODO
  *  @param bufferSize  TODO
  *  @param bufferCount TODO
+ *  @param flags       TODO
  *
  *  @return Returns icom communication descriptor */
-icom_t *icom_initPush(ch* comString, unsigned bufferSize, unsigned bufferCount);
+icom_t *icom_initPush(char* comString, unsigned bufferSize, unsigned bufferCount, uint32_t flags);
 
 
 /*@ Initialization of the icom PUSH-PULL communication sink, note that 
@@ -48,9 +51,10 @@ icom_t *icom_initPush(ch* comString, unsigned bufferSize, unsigned bufferCount);
  *
  *  @param comString   TODO
  *  @param bufferSize  TODO
+ *  @param flags       TODO
  *
  *  @return Returns icom communication descriptor */
-icom_t *icom_initPull(char *comString, unsigned bufferSize);
+icom_t *icom_initPull(char *comString, unsigned bufferSize, uint32_t flags);
 
 
 /*@ TODO */
