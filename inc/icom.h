@@ -40,10 +40,9 @@ typedef struct icom_t{
  *  @param comString   TODO
  *  @param bufferSize  TODO
  *  @param bufferCount TODO
- *  @param flags       TODO
  *
  *  @return Returns icom communication descriptor */
-icom_t *icom_initPush(char* comString, unsigned bufferSize, unsigned bufferCount, uint32_t flags);
+icom_t *icom_initPush(char* comString, unsigned bufferSize, unsigned bufferCount);
 
 
 /*@ Initialization of the icom PUSH-PULL communication sink, note that 
@@ -51,10 +50,9 @@ icom_t *icom_initPush(char* comString, unsigned bufferSize, unsigned bufferCount
  *
  *  @param comString   TODO
  *  @param bufferSize  TODO
- *  @param flags       TODO
  *
  *  @return Returns icom communication descriptor */
-icom_t *icom_initPull(char *comString, unsigned bufferSize, uint32_t flags);
+icom_t *icom_initPull(char *comString, unsigned bufferSize);
 
 
 /*@ TODO */

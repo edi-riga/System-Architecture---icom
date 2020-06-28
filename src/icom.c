@@ -3,7 +3,9 @@
 #include <string.h>
 #include <pthread.h>
 #include <zmq.h>
+
 #include "icom.h"
+#include "string_parser.h"
 
 /* INFO */
 #define _I(fmt,args...)    printf(fmt "\n", ##args)
@@ -36,82 +38,6 @@ enum {
     ICOM_TYPE_PUB,
     ICOM_TYPE_SUB,
 };
-
-
-/*************** Communication string parser API ***************/
-#ifndef _GNU_SOURCE
-static inline char* strchrnul(char *ptr, char delimiter){
-    while(*ptr != delimiter && *ptr != '\0') ptr++;
-    return ptr;
-}
-#endif
-
-unsigned comStringGetCount(char *ptrStart){
-    char *ptrStop;
-    int   strCount = 0;
-    int   idFrom, idTo, ret;
-
-    do{
-        // parse entry
-        ptrStop = strchrnul(ptrStart, ',');
-        char *tmp = strndup(ptrStart, ptrStop - ptrStart);
-        ret = sscanf(tmp, "%*[^[][%d-%d]", &idFrom, &idTo);
-        free(tmp);
-       
-        // update count 
-        if(ret == 2)
-            strCount += idTo - idFrom;
-        strCount++;
-
-        // set up for next iteration
-        ptrStart = ptrStop + 1;
-    }while(*ptrStop != '\0');
-    
-    return strCount;
-}
-
-int comStringGetArray(char ***strArray, unsigned *strCount, char *ptrStart){
-    char *ptrStop, *idStr;
-    int   idFrom, idTo, ret;
-    unsigned strCurrent = 0;
-
-    // allocate memories
-    *strCount = comStringGetCount(ptrStart);
-    *strArray = (char**)malloc((*strCount)*sizeof(char*));
-
-    do{
-        // parse entry
-        ptrStop = strchrnul(ptrStart, ',');
-        char *candidate = strndup(ptrStart, ptrStop - ptrStart);
-        ret = sscanf(candidate, "%m[^[][%d-%d]", &idStr, &idFrom, &idTo);
-       
-        // update count 
-        if(ret != 3){
-            (*strArray)[strCurrent] = candidate;
-            strCurrent++;
-        }else{
-            for(int i = idFrom; i <= idTo; i++){
-                unsigned size = snprintf(NULL, 0, "%s%d", idStr, i) + 1;
-                (*strArray)[strCurrent] = (char*)malloc(size*sizeof(char));
-                sprintf((*strArray)[strCurrent], "%s%d", idStr, i);
-                strCurrent++;
-            }
-            free(candidate);
-        }
-        free(idStr);
-
-        // set up for next iteration
-        ptrStart = ptrStop + 1;
-    }while(*ptrStop != '\0');
-
-    return 0;
-}
-
-void comStringClean(char ***strArray, unsigned strCount){
-    for(int i=0; i<strCount; i++)
-        free((*strArray)[i]);
-    free(*strArray);
-}
 
 
 /*************** ICOM ZMQ-based API ***************/
@@ -253,7 +179,7 @@ int icom_initBuffers(icomBuffer_t **buffers, unsigned bufferCount, unsigned buff
     return 0;
 }
 
-icom_t *icom_initPush(char *comString, unsigned bufferSize, unsigned bufferCount, uint32_t flags){
+icom_t *icom_initPush(char *comString, unsigned bufferSize, unsigned bufferCount){
 
     /* allocate and initialize icom structure */
     icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
@@ -263,7 +189,7 @@ icom_t *icom_initPush(char *comString, unsigned bufferSize, unsigned bufferCount
     icom->cbDo        = icom_doPush;
 
     /* parse communication strings */
-    comStringGetArray(&(icom->comStrings), &(icom->socketCount), comString);
+    parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
 
     /* initialize sockets */
     icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
@@ -274,7 +200,7 @@ icom_t *icom_initPush(char *comString, unsigned bufferSize, unsigned bufferCount
     return icom;
 }
 
-icom_t *icom_initPull(char *comString, unsigned bufferSize, uint32_t flags){
+icom_t *icom_initPull(char *comString, unsigned bufferSize){
 
     /* allocate and initialize icom structure */
     icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
@@ -282,7 +208,7 @@ icom_t *icom_initPull(char *comString, unsigned bufferSize, uint32_t flags){
     icom->cbDo        = icom_doPull;
 
     /* parse communication strings */
-    comStringGetArray(&(icom->comStrings), &(icom->socketCount), comString);
+    parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
     icom->bufferCount = icom->socketCount;
 
     /* initialize sockets */
@@ -307,7 +233,7 @@ void icom_pushDeinit(icom_t *icom){
     free(icom->sockets);
 
     /* release allocated strings */
-    comStringClean(&(icom->comStrings), icom->socketCount);
+    parser_deinitStrArray(&(icom->comStrings), icom->socketCount);
 
     /* release holding struct */
     free(icom);
