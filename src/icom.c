@@ -41,6 +41,9 @@ enum {
 };
 
 
+/******************************************************************************/
+/******************************** ICOM COMMON *********************************/
+/******************************************************************************/
 /*@ Initializes (if not initialized) and returns global ZMQ context */
 static void *icom_getContext(){
     pthread_mutex_lock(&lockGetContext);
@@ -93,8 +96,6 @@ void icom_release(){
 }
 
 
-
-/* TODO: zero copy */
 int icom_sendPacket(icomSocket_t *socket, icomPacket_t *packet){
     _D("Sending header");
     zmq_send(socket->socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
@@ -103,14 +104,44 @@ int icom_sendPacket(icomSocket_t *socket, icomPacket_t *packet){
     return zmq_send(socket->socket, packet->payload, packet->header.size, 0);
 }
 
-
-/* TODO: zero copy */
 int icom_recvPacket(icomSocket_t *socket, icomPacket_t *packet){
     _D("Receiving header");
     zmq_recv(socket->socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
 
     _D("Receiving payload");
     return zmq_recv(socket->socket, packet->payload, packet->header.size, 0);
+}
+
+int icom_sendPacketZero(icomSocket_t *socket, icomPacket_t *packet){
+    _D("Sending zero copy packet");
+    return zmq_send(socket->socket, packet, sizeof(icomPacket_t), 0);
+}
+
+int icom_recvPacketZero(icomSocket_t *socket, icomPacket_t *packet){
+    _D("Receiving zero-copy packet");
+    return zmq_recv(socket->socket, packet, sizeof(icomPacket_t), 0);
+}
+
+void icom_deinit(icom_t *icom){
+    /* release memory buffers */
+    if( !(icom->flags & ICOM_ZERO_COPY) ){
+        for(int i=0; i<icom->packetCount; i++)
+            free(icom->packets[i].payload);
+    }
+
+    /* closing all opened sockets */
+    for(int i=0; i<icom->socketCount; i++)
+        zmq_close(icom->sockets[i].socket);
+
+    /* release memory and socket buffers */
+    free(icom->packets);
+    free(icom->sockets);
+
+    /* release allocated strings */
+    parser_deinitStrArray(icom->comStrings, icom->socketCount);
+
+    /* release holding struct */
+    free(icom);
 }
 
 
@@ -121,10 +152,22 @@ icomPacket_t *icom_getCurrentPacket(icom_t *icom){
 /******************************************************************************/
 /******************************** PUSH SOCKETS ********************************/
 /******************************************************************************/
-icomPacket_t *icom_doPush(icom_t *icom){
+icomPacket_t *icom_doPushDeep(icom_t *icom){
     /* send packet sequence */
     for(int i=0; i<icom->socketCount; i++)
         icom_sendPacket(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
+
+    /* update buffer index */
+    if(++icom->packetIndex >= icom->packetCount)
+        icom->packetIndex = 0;
+    
+    return &(icom->packets[icom->packetIndex]);
+}
+
+icomPacket_t *icom_doPushZero(icom_t *icom){
+    /* send packet sequence */
+    for(int i=0; i<icom->socketCount; i++)
+        icom_sendPacketZero(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
 
     /* update buffer index */
     if(++icom->packetIndex >= icom->packetCount)
@@ -164,13 +207,21 @@ int icom_initPushSockets(icomSocket_t **sockets, unsigned socketCount, char** co
     return 0;
 }
 
-icom_t *icom_initPush(char *comString, unsigned payloadSize, unsigned packetCount){
+icom_t *icom_initPush(char *comString, unsigned payloadSize, unsigned packetCount, uint32_t flags){
     /* allocate and initialize icom structure */
     icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
     icom->packetCount = packetCount;
     icom->packetIndex = 0;
-    icom->type        = ICOM_TYPE_PUSH_DEEP; //TODO: FIX config
-    icom->cbDo        = icom_doPush; //TODO: FIX config
+    icom->flags       = flags;
+
+    /* check if zero copy is asked for (TODO: PROTECTED) */
+    if( flags & ICOM_ZERO_COPY){
+        icom->type = ICOM_TYPE_PUSH_ZERO_PROTECTED;
+        icom->cbDo = icom_doPushZero;
+    } else {
+        icom->type = ICOM_TYPE_PUSH_DEEP;
+        icom->cbDo = icom_doPushDeep;
+    }
 
     /* parse communication strings */
     parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
@@ -208,7 +259,7 @@ void icom_deinitPush(icom_t *icom){
 /******************************************************************************/
 /******************************** PULL SOCKETS ********************************/
 /******************************************************************************/
-icomPacket_t *icom_doPull(icom_t *icom){
+icomPacket_t *icom_doPullDeep(icom_t *icom){
     /* receive all buffers from all sockets */
     for(int i=0; i<icom->socketCount; i++){
         icom_recvPacket(&(icom->sockets[i]), &(icom->packets[i]));
@@ -216,6 +267,17 @@ icomPacket_t *icom_doPull(icom_t *icom){
 
     return icom->packets;
 }
+
+
+icomPacket_t *icom_doPullZero(icom_t *icom){
+    /* receive all buffers from all sockets */
+    for(int i=0; i<icom->socketCount; i++){
+        icom_recvPacketZero(&(icom->sockets[i]), &(icom->packets[i]));
+    }
+
+    return icom->packets;
+}
+
 
 int icom_initPullSocket(icomSocket_t *socket, char *string){
     socket->string = string;
@@ -247,11 +309,22 @@ int icom_initPullSockets(icomSocket_t **sockets, unsigned socketCount, char** co
     return 0;
 }
 
-icom_t *icom_initPull(char *comString, unsigned payloadSize){
+icom_t *icom_initPull(char *comString, unsigned payloadSize, uint32_t flags){
     /* allocate and initialize icom structure */
     icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
-    icom->type   = ICOM_TYPE_PULL_DEEP; // TODO: config
-    icom->cbDo   = icom_doPull; // TODO: fix config
+    icom->flags  = flags;
+
+    /* check if zero copy is asked for (TODO: PROTECTED) */
+    if( flags & ICOM_ZERO_COPY){
+        icom->type     = ICOM_TYPE_PULL_ZERO_PROTECTED;
+        icom->cbDo     = icom_doPullZero; 
+        //icom->cbDeinit = icom_deinitPull; 
+    } else {
+        icom->type     = ICOM_TYPE_PULL_DEEP;
+        icom->cbDo     = icom_doPullDeep; 
+        //icom->cbDeinit = icom_deinitPull; 
+    }
+
 
     /* parse communication strings */
     parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
@@ -265,27 +338,6 @@ icom_t *icom_initPull(char *comString, unsigned payloadSize){
 
     return icom;
 }
-
-void icom_deinitPull(icom_t *icom){
-    /* release memory buffers */
-    for(int i=0; i<icom->packetCount; i++)
-        free(icom->packets[i].payload);
-
-    /* closing all opened sockets */
-    for(int i=0; i<icom->socketCount; i++)
-        zmq_close(icom->sockets[i].socket);
-
-    /* release memory and socket buffers */
-    free(icom->packets);
-    free(icom->sockets);
-
-    /* release allocated strings */
-    parser_deinitStrArray(icom->comStrings, icom->socketCount);
-
-    /* release holding struct */
-    free(icom);
-}
-
 
 //static inline int icom_sendSync(void *socket){
 //    char dummy[1];

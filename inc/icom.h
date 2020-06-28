@@ -4,6 +4,14 @@
 #include <stdint.h>
 #include <semaphore.h>
 
+
+/*@ Flags, which can be used for the initialization of the communication 
+ *  channels */
+#define ICOM_DEFAULT     (0)
+#define ICOM_ZERO_COPY   (1<<0)
+#define ICOM_PROTECTED   (1<<1)
+
+
 /*@ These are the different types of icom transactions, basically a combination
  *  from different communication paradigms, zero vs deep copy and protected vs 
  *  unprotected access. Protected refers to the zero data copy and semaphore
@@ -60,7 +68,8 @@ typedef struct {
 typedef struct icom_t{
     /* high-level configuration */
     icomPacketType_t  type;        //@ type of the communication
-    char             **comStrings; //@ input communication string (might be used for debugging)
+    char            **comStrings;  //@ input communication string (might be used for debugging)
+    uint32_t          flags;       //@ flags associated with the communication
 
     /* communication socket */
     icomSocket_t     *sockets;     //@ an array of communication sockets
@@ -93,7 +102,7 @@ void icom_release();
  *  @param bufferCount TODO
  *
  *  @return Returns icom communication descriptor */
-icom_t *icom_initPush(char* comString, unsigned bufferSize, unsigned bufferCount);
+icom_t *icom_initPush(char* comString, unsigned bufferSize, unsigned bufferCount, uint32_t flags);
 
 
 /*@ Initialization of the icom PUSH-PULL communication sink, note that 
@@ -103,7 +112,11 @@ icom_t *icom_initPush(char* comString, unsigned bufferSize, unsigned bufferCount
  *  @param bufferSize  TODO
  *
  *  @return Returns icom communication descriptor */
-icom_t *icom_initPull(char *comString, unsigned bufferSize);
+icom_t *icom_initPull(char *comString, unsigned bufferSize, uint32_t flags);
+
+
+/*@ TODO */
+void icom_deinit(icom_t *icom);
 
 
 /*@ TODO */
