@@ -21,7 +21,7 @@ DIR:=$(sort $(dir $(OBJ))) $(sort $(dir $(OUT)))
 INC:=-Iinc -Ilib
 LIB:=-lzmq
 
-all:$(DIR) $(OUT) compile_tests done
+all:$(DIR) $(OUT) done
 
 done:
 	@echo
