@@ -71,8 +71,8 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, char *ptrStart){
     return 0;
 }
 
-void parser_deinitStrArray(char ***strArray, unsigned strCount){
+void parser_deinitStrArray(char **strArray, unsigned strCount){
     for(int i=0; i<strCount; i++)
-        free((*strArray)[i]);
-    free(*strArray);
+        free((strArray)[i]);
+    free(strArray);
 }
