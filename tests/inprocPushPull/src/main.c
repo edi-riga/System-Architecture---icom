@@ -40,34 +40,34 @@ char *comRx3[] = {
 };
 
 void *thread_push(void *arg){
-    icom_t *icom = icom_initPush((char*)arg, sizeof(int), 2, 0);
-    icomBuffer_t *buff = icom_getCurrentBuffer(icom);
+    icom_t *icom = icom_initPush((char*)arg, sizeof(int), 2);
+    icomPacket_t *buff = icom_getCurrentPacket(icom);
 
     for(int i=0; i<5; i++){
         printf("Sending(%s) %d\n", (char*)arg, i);
-        ((int*)(buff->mem))[0] = i;
+        ((int*)(buff->payload))[0] = i;
         buff = icom_do(icom);
     }
     //sleep(1);
 
-    icom_pushDeinit(icom);
+    icom_deinitPush(icom);
     return NULL;
 }
 
 void *thread_pull(void *arg){
-    icom_t *icom = icom_initPull((char*)arg, sizeof(int), 0);
-    icomBuffer_t *buff;
+    icom_t *icom = icom_initPull((char*)arg, sizeof(int));
+    icomPacket_t *buff;
 
     for(int i=0; i<5; i++){
         //sleep(1);
         buff = icom_do(icom);
         do{
-            printf("Received(%s): %u\n", (char*)arg, ((int*)buff->mem)[0]);
+            printf("Received(%s): %u\n", (char*)arg, ((int*)buff->payload)[0]);
             buff = buff->next;
         } while(buff != NULL);
     }
 
-    icom_pushDeinit(icom);
+    icom_deinitPull(icom);
     return NULL;
 }
 
