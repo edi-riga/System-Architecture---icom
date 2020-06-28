@@ -20,8 +20,9 @@
 
 /* DEBUGGING */
 #if DEBUG
-    #define _D(fmt,args...)  printf("DEBUG: "fmt "\n", ##args); fflush(stdout)
+    #define _D(fmt,args...)  printf("DEBUG:%u: "fmt "\n", __LINE__, ##args); fflush(stdout)
 #else
+    //#define _D(fmt,args...)  printf("DEBUG:%u: "fmt "\n", __LINE__, ##args); fflush(stdout)
     #define _D(fmt,args...)    
 #endif
 
@@ -40,10 +41,8 @@ enum {
 };
 
 
-/*************** ICOM ZMQ-based API ***************/
-/* Get (and create) ZMQ context */
+/*@ Initializes (if not initialized) and returns global ZMQ context */
 static void *icom_getContext(){
-
     pthread_mutex_lock(&lockGetContext);
 
     if(zmqContext == NULL){
@@ -58,49 +57,82 @@ static void *icom_getContext(){
     return zmqContext;
 }
 
+/*@ TODO */
+void icom_setSockopt(void *socket, int name, int value){
+    if(zmq_setsockopt(socket, name, &value, sizeof(value)) == -1)
+        _SW("Failed to set socket option");
+}
+
+
+/*@ TODO */
+int icom_initPackets(icomPacket_t **packets, unsigned packetCount, unsigned payloadSize){
+    *packets = (icomPacket_t*)malloc(packetCount*sizeof(icomPacket_t));
+
+    for(int i=0; i<packetCount; i++){
+        //(*packets)[i].header.type = ; TODO
+        (*packets)[i].header.size = payloadSize;
+        (*packets)[i].payload     = malloc(payloadSize);
+    }
+
+    /* create a linked list */
+    for(int i=0; i<packetCount-1; i++){
+        (*packets)[i].next = &((*packets)[i+1]);
+    }
+    (*packets)[packetCount-1].next = NULL;
+
+    return 0;
+}
+
+
 void icom_init(){
+    icom_getContext();  // initialize zmq context
 }
 
 void icom_release(){
     zmq_ctx_destroy(zmqContext);
 }
 
-void icom_setSockopt(void *socket, int name, int value){
-    if(zmq_setsockopt(socket, name, &value, sizeof(value)) == -1)
-        _SW("Failed to set socket option");
+
+
+/* TODO: zero copy */
+int icom_sendPacket(icomSocket_t *socket, icomPacket_t *packet){
+    _D("Sending header");
+    zmq_send(socket->socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
+
+    _D("Sending payload");
+    return zmq_send(socket->socket, packet->payload, packet->header.size, 0);
 }
 
-int icom_updateConnectSockopt(void *socket, char *string, int name, int value){
-    if(zmq_disconnect(socket, string) != 0){
-        _SE("Failed to disconnect socket");
-        return errno;
-    }
 
-    icom_setSockopt(socket, name, value);
+/* TODO: zero copy */
+int icom_recvPacket(icomSocket_t *socket, icomPacket_t *packet){
+    _D("Receiving header");
+    zmq_recv(socket->socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
+
+    _D("Receiving payload");
+    return zmq_recv(socket->socket, packet->payload, packet->header.size, 0);
+}
+
+
+icomPacket_t *icom_getCurrentPacket(icom_t *icom){
+    return &(icom->packets[icom->packetIndex]);
+}
+
+/******************************************************************************/
+/******************************** PUSH SOCKETS ********************************/
+/******************************************************************************/
+icomPacket_t *icom_doPush(icom_t *icom){
+    /* send packet sequence */
+    for(int i=0; i<icom->socketCount; i++)
+        icom_sendPacket(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
+
+    /* update buffer index */
+    if(++icom->packetIndex >= icom->packetCount)
+        icom->packetIndex = 0;
     
-    if(zmq_connect(socket, string) != 0){
-        _SE("Failed to connect socket");
-        return errno;
-    };
-
-    return 0;
+    return &(icom->packets[icom->packetIndex]);
 }
 
-int icom_updateBindSockopt(void *socket, char *string, int name, int value){
-    if(zmq_unbind(socket, string) != 0){
-        _SE("Failed to unbind socket");
-        return errno;
-    }
-
-    icom_setSockopt(socket, name, value);
-    
-    if(zmq_unbind(socket, string) != 0){
-        _SE("Failed to unbind socket");
-        return errno;
-    };
-
-    return 0;
-}
 
 int icom_initPushSocket(icomSocket_t *socket, char *string){
     socket->string = string;
@@ -121,6 +153,68 @@ int icom_initPushSocket(icomSocket_t *socket, char *string){
     }
 
     return 0;
+}
+
+int icom_initPushSockets(icomSocket_t **sockets, unsigned socketCount, char** comStrings){
+    *sockets = (icomSocket_t*)malloc(socketCount*sizeof(icomSocket_t));
+
+    for(int i=0; i<socketCount; i++)
+        icom_initPushSocket(*sockets+i, comStrings[i]);
+
+    return 0;
+}
+
+icom_t *icom_initPush(char *comString, unsigned payloadSize, unsigned packetCount){
+    /* allocate and initialize icom structure */
+    icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
+    icom->packetCount = packetCount;
+    icom->packetIndex = 0;
+    icom->type        = ICOM_TYPE_PUSH_DEEP; //TODO: FIX config
+    icom->cbDo        = icom_doPush; //TODO: FIX config
+
+    /* parse communication strings */
+    parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
+
+    /* initialize sockets */
+    icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
+
+    /* initialize buffers */
+    icom_initPackets(&(icom->packets), icom->packetCount, payloadSize);
+
+    return icom;
+}
+
+void icom_deinitPush(icom_t *icom){
+    /* release memory buffers */
+    for(int i=0; i<icom->packetCount; i++)
+        free(icom->packets[i].payload);
+
+    /* closing all opened sockets */
+    for(int i=0; i<icom->socketCount; i++)
+        zmq_close(icom->sockets[i].socket);
+
+    /* release memory and socket buffers */
+    free(icom->packets);
+    free(icom->sockets);
+
+    /* release allocated strings */
+    parser_deinitStrArray(icom->comStrings, icom->socketCount);
+
+    /* release holding struct */
+    free(icom);
+}
+
+
+/******************************************************************************/
+/******************************** PULL SOCKETS ********************************/
+/******************************************************************************/
+icomPacket_t *icom_doPull(icom_t *icom){
+    /* receive all buffers from all sockets */
+    for(int i=0; i<icom->socketCount; i++){
+        icom_recvPacket(&(icom->sockets[i]), &(icom->packets[i]));
+    }
+
+    return icom->packets;
 }
 
 int icom_initPullSocket(icomSocket_t *socket, char *string){
@@ -153,138 +247,95 @@ int icom_initPullSockets(icomSocket_t **sockets, unsigned socketCount, char** co
     return 0;
 }
 
-int icom_initPushSockets(icomSocket_t **sockets, unsigned socketCount, char** comStrings){
-    *sockets = (icomSocket_t*)malloc(socketCount*sizeof(icomSocket_t));
-
-    for(int i=0; i<socketCount; i++)
-        icom_initPushSocket(*sockets+i, comStrings[i]);
-
-    return 0;
-}
-
-int icom_initBuffers(icomBuffer_t **buffers, unsigned bufferCount, unsigned bufferSize){
-    *buffers = (icomBuffer_t*)malloc(bufferCount*sizeof(icomBuffer_t));
-
-    for(int i=0; i<bufferCount; i++){
-        (*buffers)[i].size = bufferSize;
-        (*buffers)[i].mem  = malloc(bufferSize);
-    }
-
-    /* create a linked list */
-    for(int i=0; i<bufferCount-1; i++){
-        (*buffers)[i].next = &((*buffers)[i+1]);
-    }
-    (*buffers)[bufferCount-1].next = NULL;
-
-    return 0;
-}
-
-icom_t *icom_initPush(char *comString, unsigned bufferSize, unsigned bufferCount){
-
+icom_t *icom_initPull(char *comString, unsigned payloadSize){
     /* allocate and initialize icom structure */
     icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
-    icom->bufferCount = bufferCount;
-    icom->bufferIdx   = 0;
-    icom->type        = ICOM_TYPE_PUSH;
-    icom->cbDo        = icom_doPush;
+    icom->type   = ICOM_TYPE_PULL_DEEP; // TODO: config
+    icom->cbDo   = icom_doPull; // TODO: fix config
 
     /* parse communication strings */
     parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
-
-    /* initialize sockets */
-    icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
-
-    /* initialize buffers */
-    icom_initBuffers(&(icom->buffers), icom->bufferCount, bufferSize);
-
-    return icom;
-}
-
-icom_t *icom_initPull(char *comString, unsigned bufferSize){
-
-    /* allocate and initialize icom structure */
-    icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
-    icom->type        = ICOM_TYPE_PULL;
-    icom->cbDo        = icom_doPull;
-
-    /* parse communication strings */
-    parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
-    icom->bufferCount = icom->socketCount;
+    icom->packetCount = icom->socketCount;
 
     /* initialize sockets */
     icom_initPullSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
 
     /* initialize buffers */
-    icom_initBuffers(&(icom->buffers), icom->bufferCount, bufferSize);
+    icom_initPackets(&(icom->packets), icom->packetCount, payloadSize);
 
     return icom;
 }
 
-void icom_pushDeinit(icom_t *icom){
+void icom_deinitPull(icom_t *icom){
     /* release memory buffers */
-    for(int i=0; i<icom->bufferCount; i++)
-        free(icom->buffers[i].mem);
+    for(int i=0; i<icom->packetCount; i++)
+        free(icom->packets[i].payload);
 
+    /* closing all opened sockets */
     for(int i=0; i<icom->socketCount; i++)
         zmq_close(icom->sockets[i].socket);
 
     /* release memory and socket buffers */
-    free(icom->buffers);
+    free(icom->packets);
     free(icom->sockets);
 
     /* release allocated strings */
-    parser_deinitStrArray(&(icom->comStrings), icom->socketCount);
+    parser_deinitStrArray(icom->comStrings, icom->socketCount);
 
     /* release holding struct */
     free(icom);
 }
 
-static inline int icom_sendSync(void *socket){
-    char dummy[1];
-    return zmq_send(socket, dummy, sizeof(dummy), 0);
-}
 
-static inline int icom_recvSync(void *socket){
-    char dummy[1];
-    return zmq_recv(socket, dummy, sizeof(dummy), 0);
-}
+//static inline int icom_sendSync(void *socket){
+//    char dummy[1];
+//    return zmq_send(socket, dummy, sizeof(dummy), 0);
+//}
+//
+//static inline int icom_recvSync(void *socket){
+//    char dummy[1];
+//    return zmq_recv(socket, dummy, sizeof(dummy), 0);
+//}
+//
+//static inline int icom_sendBuf(icomSocket_t *socket, icom
+//    return zmq_send(socket->socket, buffer->mem, buffer->size, 0);
+//}
+//
+//static inline int icom_recvBuf(icomSocket_t *socket, icomBuffer_t *buffer){
+//    return zmq_recv(socket->socket, buffer->mem, buffer->size, 0);
+//}
+//
+//
+//
 
-static inline int icom_sendBuf(icomSocket_t *socket, icomBuffer_t *buffer){
-    return zmq_send(socket->socket, buffer->mem, buffer->size, 0);
-}
+//int icom_updateConnectSockopt(void *socket, char *string, int name, int value){
+//    if(zmq_disconnect(socket, string) != 0){
+//        _SE("Failed to disconnect socket");
+//        return errno;
+//    }
+//
+//    icom_setSockopt(socket, name, value);
+//    
+//    if(zmq_connect(socket, string) != 0){
+//        _SE("Failed to connect socket");
+//        return errno;
+//    };
+//
+//    return 0;
+//}
 
-static inline int icom_recvBuf(icomSocket_t *socket, icomBuffer_t *buffer){
-    return zmq_recv(socket->socket, buffer->mem, buffer->size, 0);
-}
-
-icomBuffer_t *icom_doPush(icom_t *icom){
-    //int res;
-
-    /* send current buffer */
-    for(int i=0; i<icom->socketCount; i++){
-        icom_sendBuf(&(icom->sockets[i]), &(icom->buffers[icom->bufferIdx]));
-
-        /*  */
-        //if(res == -1)
-        //    _W("Message dropped");
-    }
-
-    /* update buffer index */
-    if(++icom->bufferIdx >= icom->bufferCount)
-        icom->bufferIdx = 0;
-    
-    return &(icom->buffers[icom->bufferIdx]);
-}
-
-icomBuffer_t *icom_doPull(icom_t *icom){
-    /* receive all buffers from all sockets */
-    for(int i=0; i<icom->socketCount; i++){
-        icom_recvBuf(&(icom->sockets[i]), &(icom->buffers[i]));
-    }
-
-    return icom->buffers;
-}
-
-icomBuffer_t *icom_getCurrentBuffer(icom_t *icom){
-    return &(icom->buffers[icom->bufferIdx]);
-}
+//int icom_updateBindSockopt(void *socket, char *string, int name, int value){
+//    if(zmq_unbind(socket, string) != 0){
+//        _SE("Failed to unbind socket");
+//        return errno;
+//    }
+//
+//    icom_setSockopt(socket, name, value);
+//    
+//    if(zmq_unbind(socket, string) != 0){
+//        _SE("Failed to unbind socket");
+//        return errno;
+//    };
+//
+//    return 0;
+//}
