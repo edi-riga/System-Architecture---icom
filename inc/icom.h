@@ -17,18 +17,10 @@
  *  unprotected access. Protected refers to the zero data copy and semaphore
  *  based access protection */
 typedef enum {
-    ICOM_TYPE_PUSH_DEEP            =0,  //@
-    ICOM_TYPE_PUSH_ZERO_PROTECTED  =1,  //@
-    ICOM_TYPE_PUSH_ZERO_UNPROTECTED=2,  //@
-    ICOM_TYPE_PULL_DEEP            =3,  //@
-    ICOM_TYPE_PULL_ZERO_PROTECTED  =4,  //@
-    ICOM_TYPE_PULL_ZERO_UNPROTECTED=5,  //@
-    ICOM_TYPE_PUB_DEEP             =6,  //@
-    ICOM_TYPE_PUB_ZERO_PROTECTED   =7,  //@
-    ICOM_TYPE_PUB_ZERO_UNPROTECTED =8,  //@
-    ICOM_TYPE_SUB_DEEP             =9,  //@
-    ICOM_TYPE_SUB_ZERO_PROTECTED   =10, //@
-    ICOM_TYPE_SUB_ZERO_UNPROTECTED =11, //@
+    ICOM_TYPE_PUSH =0,  //@
+    ICOM_TYPE_PULL =1,  //@
+    ICOM_TYPE_PUB  =2,  //@
+    ICOM_TYPE_SUB  =3,  //@
 } icomPacketType_t;
 
 
@@ -120,11 +112,11 @@ void icom_deinit(icom_t *icom);
 
 
 /*@ TODO */
-void icom_deinitPush(icom_t *icom);
+//void icom_deinitPush(icom_t *icom);
 
 
 /*@ TODO */
-void icom_deinitPull(icom_t *icom);
+//void icom_deinitPull(icom_t *icom);
 
 
 /*@ TODO */
