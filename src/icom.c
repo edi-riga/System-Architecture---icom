@@ -22,6 +22,7 @@
 #if DEBUG
     #define _D(fmt,args...)  printf("DEBUG:%s:%u: "fmt "\n", __func__, __LINE__, ##args); fflush(stdout)
 #else
+    //#define _D(fmt,args...)  printf("DEBUG:%s:%u: "fmt "\n", __func__, __LINE__, ##args); fflush(stdout)
     #define _D(fmt,args...)    
 #endif
 
@@ -204,14 +205,47 @@ int icom_recvPacket(icomSocket_t *socket, icomPacket_t *packet){
     return zmq_recv(socket->socket, packet->payload, packet->header.size, 0);
 }
 
+// TODO: find more efficient
 int icom_sendPacketZero(icomSocket_t *socket, icomPacket_t *packet){
+    int size = 0;
     _D("Sending zero copy packet");
-    return zmq_send(socket->socket, packet, sizeof(icomPacket_t), 0);
+
+    _D("\"%s\": Sending reference to header", socket->string);
+    size += zmq_send(socket->socket, &packet->header, sizeof(icomPacketHeader_t*), 0);
+
+    _D("\"%s\": Sending reference to payload", socket->string);
+    size += zmq_send(socket->socket, &packet->payload, sizeof(icomPacketPayload_t*), 0);
+
+    _D("\"%s\": Sending reference to semWrite", socket->string);
+    size += zmq_send(socket->socket, &packet->semWrite, sizeof(sem_t*), 0);
+
+    _D("\"%s\": Sending reference to semRead", socket->string);
+    size += zmq_send(socket->socket, &packet->semRead, sizeof(sem_t*), 0);
+
+    return size;
+    //return zmq_send(socket->socket, packet, sizeof(icomPacket_t), 0);
 }
 
+// TODO: find more efficient
 int icom_recvPacketZero(icomSocket_t *socket, icomPacket_t *packet){
+    int size = 0;
+
     _D("Receiving zero-copy packet");
-    return zmq_recv(socket->socket, packet, sizeof(icomPacket_t), 0);
+
+    _D("\"%s\": Receiving reference to header", socket->string);
+    zmq_recv(socket->socket, &packet->header, sizeof(icomPacketHeader_t*), 0);
+
+    _D("\"%s\": Receiving reference to payload", socket->string);
+    zmq_recv(socket->socket, &packet->payload, sizeof(icomPacketPayload_t*), 0);
+
+    _D("\"%s\": Receiving reference to semWrite", socket->string);
+    zmq_recv(socket->socket, &packet->semWrite, sizeof(sem_t*), 0);
+
+    _D("\"%s\": Receiving reference to semRead", socket->string);
+    zmq_recv(socket->socket, &packet->semRead, sizeof(sem_t*), 0);
+
+    return size;
+    //return zmq_recv(socket->socket, packet, sizeof(icomPacket_t), 0);
 }
 
 
