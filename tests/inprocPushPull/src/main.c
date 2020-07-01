@@ -4,9 +4,25 @@
 #include <stdint.h>
 #include <pthread.h>
 #include "icom.h"
+#include "testUtils.h"
+
+const char *MSG_SINGLE2SINGLE     = "Single to single communication";
+const char *MSG_SINGLE2MULTIPLE   = "Single to multiple communication";
+const char *MSG_MULTIPLE2SINGLE   = "Multiple to single communication";
+const char *MSG_MULTIPLE2MULTIPLE = "Multiple to multiple communication";
+const char *MSG_SINGLE2SINGLE_ZERO     = "Single to single communication (ZERO COPY)";
+const char *MSG_SINGLE2MULTIPLE_ZERO   = "Single to multiple communication (ZERO COPY)";
+const char *MSG_MULTIPLE2SINGLE_ZERO   = "Multiple to single communication (ZERO COPY)";
+const char *MSG_MULTIPLE2MULTIPLE_ZERO = "Multiple to multiple communication (ZERO COPY)";
+const char *MSG_SINGLE2SINGLE_ZERO_PROTECTED     = "Single to single communication (ZERO COPY, PROTECTED)";
+const char *MSG_SINGLE2MULTIPLE_ZERO_PROTECTED   = "Single to multiple communication (ZERO COPY, PROTECTED)";
+const char *MSG_MULTIPLE2SINGLE_ZERO_PROTECTED   = "Multiple to single communication (ZERO COPY, PROTECTED)";
+const char *MSG_MULTIPLE2MULTIPLE_ZERO_PROTECTED = "Multiple to multiple communication (ZERO COPY, PROTECTED)";
+
 
 /* Global flags */
 uint32_t flags = ICOM_DEFAULT;
+const char *msgTest;
 
 
 /* TEST 0 */
@@ -44,14 +60,17 @@ char *comRx3[] = {
     "inproc://d3",
 };
 
+
 void *thread_push(void *arg){
     icom_t *icom = icom_initPush((char*)arg, sizeof(int), 2, flags);
-    icomPacket_t *buff = icom_getCurrentPacket(icom);
+    int *buffer;
 
     for(int i=0; i<5; i++){
-        printf("Sending(%s) %d\n", (char*)arg, i);
-        ((int*)(buff->payload))[0] = i;
-        buff = icom_do(icom);
+        ICOM_GET_BUFFER(icom, buffer);
+
+        buffer[0] = i;
+
+        ICOM_DO(icom);
     }
 
     usleep(1000);
@@ -61,15 +80,14 @@ void *thread_push(void *arg){
 
 void *thread_pull(void *arg){
     icom_t *icom = icom_initPull((char*)arg, sizeof(int), flags);
-    icomPacket_t *buff;
+    int *buffer;
 
     for(int i=0; i<5; i++){
-        //sleep(1);
-        buff = icom_do(icom);
-        do{
-            printf("Received(%s): %u\n", (char*)arg, ((int*)buff->payload)[0]);
-            buff = buff->next;
-        } while(buff != NULL);
+        ICOM_DO_AND_FOR_EACH_BUFFER(icom, buffer);
+
+        TEST(msgTest, buffer[0] == i);
+
+        ICOM_FOR_EACH_END;
     }
 
     icom_deinit(icom);
@@ -114,15 +132,19 @@ int main(void){
 
 
     printf("===== TEST 0 (Single Push -> Single Pull) =====\n");
+    msgTest = MSG_SINGLE2SINGLE;
     experiment(comTx0, comRx0, TEST0_PUSH_COUNT, TEST0_PULL_COUNT);
 
     printf("===== TEST 1 (Single Push -> Multiple Pull) =====\n");
+    msgTest = MSG_SINGLE2MULTIPLE;
     experiment(comTx1, comRx1, TEST1_PUSH_COUNT, TEST1_PULL_COUNT);
 
     printf("===== TEST 2 (Multiple Push -> Single Pull) =====\n");
+    msgTest = MSG_MULTIPLE2SINGLE;
     experiment(comTx2, comRx2, TEST2_PUSH_COUNT, TEST2_PULL_COUNT);
 
     printf("===== TEST 3 (Multiple Push -> Multiple Pull) =====\n");
+    msgTest = MSG_MULTIPLE2MULTIPLE;
     experiment(comTx3, comRx3, TEST3_PUSH_COUNT, TEST3_PULL_COUNT);
 
 
@@ -130,15 +152,19 @@ int main(void){
     flags = ICOM_ZERO_COPY;
 
     printf("===== TEST 4 (Single Push -> Single Pull) =====\n");
+    msgTest = MSG_SINGLE2SINGLE_ZERO;
     experiment(comTx0, comRx0, TEST0_PUSH_COUNT, TEST0_PULL_COUNT);
 
     printf("===== TEST 5 (Single Push -> Multiple Pull) =====\n");
+    msgTest = MSG_SINGLE2MULTIPLE_ZERO;
     experiment(comTx1, comRx1, TEST1_PUSH_COUNT, TEST1_PULL_COUNT);
 
     printf("===== TEST 6 (Multiple Push -> Single Pull) =====\n");
+    msgTest = MSG_MULTIPLE2SINGLE_ZERO;
     experiment(comTx2, comRx2, TEST2_PUSH_COUNT, TEST2_PULL_COUNT);
 
     printf("===== TEST 7 (Multiple Push -> Multiple Pull) =====\n");
+    msgTest = MSG_MULTIPLE2MULTIPLE_ZERO;
     experiment(comTx3, comRx3, TEST3_PUSH_COUNT, TEST3_PULL_COUNT);
 
 
@@ -146,15 +172,19 @@ int main(void){
     flags = ICOM_ZERO_COPY | ICOM_PROTECTED;
 
     printf("===== TEST 8 (Single Push -> Single Pull) =====\n");
+    msgTest = MSG_SINGLE2SINGLE_ZERO_PROTECTED;
     experiment(comTx0, comRx0, TEST0_PUSH_COUNT, TEST0_PULL_COUNT);
 
     printf("===== TEST 9 (Single Push -> Multiple Pull) =====\n");
+    msgTest = MSG_SINGLE2MULTIPLE_ZERO_PROTECTED;
     experiment(comTx1, comRx1, TEST1_PUSH_COUNT, TEST1_PULL_COUNT);
 
     printf("===== TEST 10 (Multiple Push -> Single Pull) =====\n");
+    msgTest = MSG_MULTIPLE2SINGLE_ZERO_PROTECTED;
     experiment(comTx2, comRx2, TEST2_PUSH_COUNT, TEST2_PULL_COUNT);
 
     printf("===== TEST 11 (Multiple Push -> Multiple Pull) =====\n");
+    msgTest = MSG_MULTIPLE2MULTIPLE_ZERO_PROTECTED;
     experiment(comTx3, comRx3, TEST3_PUSH_COUNT, TEST3_PULL_COUNT);
 
 
