@@ -15,7 +15,6 @@ void *thread_push(void *arg){
 
     icomPacket_t *packet = icom_getCurrentPacket(icom);
     for(int i=0; i<TRANSFER_COUNT; i++){
-        //printf("Sending(%s) %d\n", (char*)arg, i);
         ((int*)(packet->payload))[0] = i;
         packet = icom_do(icom);
     }
@@ -31,7 +30,6 @@ void *thread_pull(void *arg){
     for(int i=0; i<TRANSFER_COUNT; i++){
         packet = icom_do(icom);
         do{
-            //printf("Received(%s): %u\n", (char*)arg, ((int*)packet->payload)[0]);
             packet = packet->next;
         } while(packet != NULL);
     }
@@ -46,7 +44,6 @@ void *thread_pushZero(void *arg){
 
     icomPacket_t *packet = icom_getCurrentPacket(icom);
     for(int i=0; i<TRANSFER_COUNT; i++){
-        //printf("Sending(%s) %d\n", (char*)arg, i);
         ((int*)(packet->payload))[0] = i;
         packet = icom_do(icom);
     }
@@ -62,7 +59,6 @@ void *thread_pullZero(void *arg){
     for(int i=0; i<TRANSFER_COUNT; i++){
         packet = icom_do(icom);
         do{
-            //printf("Received(%s): %u\n", (char*)arg, ((int*)packet->payload)[0]);
             packet = packet->next;
         } while(packet != NULL);
     }
@@ -77,7 +73,6 @@ void *thread_pushZeroProtected(void *arg){
 
     icomPacket_t *packet = icom_getCurrentPacket(icom);
     for(int i=0; i<TRANSFER_COUNT; i++){
-        //printf("Sending(%s) %d\n", (char*)arg, i);
         ((int*)(packet->payload))[0] = i;
         packet = icom_do(icom);
     }
@@ -93,7 +88,6 @@ void *thread_pullZeroProtected(void *arg){
     for(int i=0; i<TRANSFER_COUNT; i++){
         packet = icom_do(icom);
         do{
-            //printf("Received(%s): %u\n", (char*)arg, ((int*)packet->payload)[0]);
             packet = packet->next;
         } while(packet != NULL);
     }
