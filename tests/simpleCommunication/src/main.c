@@ -59,6 +59,8 @@ int main(void){
     icom_t *icomPush, *icomPull;
     unsigned timeDeep, timeZero, timeZeroProtected;
 
+    testUtilsStart();
+
     _I("Initializing icom API");
     icom_init();
 
@@ -107,5 +109,5 @@ int main(void){
     _I("Deinitializing icom API");
     icom_release();
 
-    return 0;
+    return testUtilsStop();
 }

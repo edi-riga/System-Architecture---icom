@@ -103,8 +103,5 @@ int main(void){
     icom_release();
     TEST("API deinitialization", 1);
 
-
-    testUtilsStop();
-
-    return 0;
+    return testUtilsStop();
 }

@@ -130,6 +130,7 @@ int main(void){
     pthread_t pidTx2[TEST2_PUSH_COUNT], pidRx2[TEST2_PULL_COUNT];
     pthread_t pidTx3[TEST3_PUSH_COUNT], pidRx3[TEST3_PULL_COUNT];
 
+    testUtilsStart();
 
     printf("===== TEST 0 (Single Push -> Single Pull) =====\n");
     msgTest = MSG_SINGLE2SINGLE;
@@ -189,5 +190,6 @@ int main(void){
 
 
     icom_release();
-    return 0;
+
+    return testUtilsStop();
 }

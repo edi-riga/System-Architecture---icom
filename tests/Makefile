@@ -1,5 +1,24 @@
-all:
-	make -C inprocPushPull
+DIRS:=$(shell ls -d */)
+DIRS:=$(subst testUtils/,,$(DIRS))
+TESTS:=$(subst /,/out/main.elf,$(DIRS))
+DIRS_CLEAN:=$(DIRS)
 
-clean:
-	make clean -C inprocPushPull
+.PHONY: $(DIRS)
+
+
+all: $(TESTS)
+
+compile: $(DIRS)
+
+# run tests
+$(TESTS): $(DIRS)
+	eval "./$@";
+
+# compile tests
+$(DIRS):
+	+$(MAKE) -C $@
+
+# TODO: clean
+# clean tests
+# clean:
+#	+$(MAKE) -C $(DIRS) clean
