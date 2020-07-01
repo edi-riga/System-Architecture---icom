@@ -1,8 +1,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <pthread.h>
 #include "icom.h"
+
+/* Global flags */
+uint32_t flags = ICOM_DEFAULT;
+
 
 /* TEST 0 */
 char *comTx0[] = {"inproc://a0"};
@@ -40,7 +45,7 @@ char *comRx3[] = {
 };
 
 void *thread_push(void *arg){
-    icom_t *icom = icom_initPush((char*)arg, sizeof(int), 2);
+    icom_t *icom = icom_initPush((char*)arg, sizeof(int), 2, flags);
     icomPacket_t *buff = icom_getCurrentPacket(icom);
 
     for(int i=0; i<5; i++){
@@ -48,14 +53,14 @@ void *thread_push(void *arg){
         ((int*)(buff->payload))[0] = i;
         buff = icom_do(icom);
     }
-    //sleep(1);
 
-    icom_deinitPush(icom);
+    usleep(1000);
+    icom_deinit(icom);
     return NULL;
 }
 
 void *thread_pull(void *arg){
-    icom_t *icom = icom_initPull((char*)arg, sizeof(int));
+    icom_t *icom = icom_initPull((char*)arg, sizeof(int), flags);
     icomPacket_t *buff;
 
     for(int i=0; i<5; i++){
@@ -67,7 +72,7 @@ void *thread_pull(void *arg){
         } while(buff != NULL);
     }
 
-    icom_deinitPull(icom);
+    icom_deinit(icom);
     return NULL;
 }
 
@@ -107,6 +112,7 @@ int main(void){
     pthread_t pidTx2[TEST2_PUSH_COUNT], pidRx2[TEST2_PULL_COUNT];
     pthread_t pidTx3[TEST3_PUSH_COUNT], pidRx3[TEST3_PULL_COUNT];
 
+
     printf("===== TEST 0 (Single Push -> Single Pull) =====\n");
     experiment(comTx0, comRx0, TEST0_PUSH_COUNT, TEST0_PULL_COUNT);
 
@@ -118,6 +124,39 @@ int main(void){
 
     printf("===== TEST 3 (Multiple Push -> Multiple Pull) =====\n");
     experiment(comTx3, comRx3, TEST3_PUSH_COUNT, TEST3_PULL_COUNT);
+
+
+    printf("Updating flags...");
+    flags = ICOM_ZERO_COPY;
+
+    printf("===== TEST 4 (Single Push -> Single Pull) =====\n");
+    experiment(comTx0, comRx0, TEST0_PUSH_COUNT, TEST0_PULL_COUNT);
+
+    printf("===== TEST 5 (Single Push -> Multiple Pull) =====\n");
+    experiment(comTx1, comRx1, TEST1_PUSH_COUNT, TEST1_PULL_COUNT);
+
+    printf("===== TEST 6 (Multiple Push -> Single Pull) =====\n");
+    experiment(comTx2, comRx2, TEST2_PUSH_COUNT, TEST2_PULL_COUNT);
+
+    printf("===== TEST 7 (Multiple Push -> Multiple Pull) =====\n");
+    experiment(comTx3, comRx3, TEST3_PUSH_COUNT, TEST3_PULL_COUNT);
+
+
+    printf("Updating flags...");
+    flags = ICOM_ZERO_COPY | ICOM_PROTECTED;
+
+    printf("===== TEST 8 (Single Push -> Single Pull) =====\n");
+    experiment(comTx0, comRx0, TEST0_PUSH_COUNT, TEST0_PULL_COUNT);
+
+    printf("===== TEST 9 (Single Push -> Multiple Pull) =====\n");
+    experiment(comTx1, comRx1, TEST1_PUSH_COUNT, TEST1_PULL_COUNT);
+
+    printf("===== TEST 10 (Multiple Push -> Single Pull) =====\n");
+    experiment(comTx2, comRx2, TEST2_PUSH_COUNT, TEST2_PULL_COUNT);
+
+    printf("===== TEST 11 (Multiple Push -> Multiple Pull) =====\n");
+    experiment(comTx3, comRx3, TEST3_PUSH_COUNT, TEST3_PULL_COUNT);
+
 
     icom_release();
     return 0;
