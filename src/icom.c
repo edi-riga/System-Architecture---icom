@@ -20,16 +20,14 @@
 
 /* DEBUGGING */
 #if DEBUG
-    #define _D(fmt,args...)  printf("DEBUG:%u: "fmt "\n", __LINE__, ##args); fflush(stdout)
+    #define _D(fmt,args...)  printf("DEBUG:%s:%u: "fmt "\n", __func__, __LINE__, ##args); fflush(stdout)
 #else
-    //#define _D(fmt,args...)  printf("DEBUG:%u: "fmt "\n", __LINE__, ##args); fflush(stdout)
     #define _D(fmt,args...)    
 #endif
 
 
 /*************** Globals ***************/
-static void *zmqContext = NULL;        // single context per application
-static pthread_mutex_t lockGetContext; // used for thread save initialization
+static void *zmqContext = NULL; // single context per application
 
 
 
@@ -38,10 +36,10 @@ static pthread_mutex_t lockGetContext; // used for thread save initialization
 /*============================================================================*/
 /*@ TODO */
 static inline int hasAllocatedBuffers(icom_t *icom){
-    if((icom->type = ICOM_TYPE_PULL) && (icom->flags & ICOM_ZERO_COPY))
+    if((icom->type == ICOM_TYPE_PULL) && (icom->flags & ICOM_ZERO_COPY))
         return 0;
 
-    if((icom->type = ICOM_TYPE_SUB)  && (icom->flags & ICOM_ZERO_COPY))
+    if((icom->type ==ICOM_TYPE_SUB)  && (icom->flags & ICOM_ZERO_COPY))
         return 0;
 
     return 1;
@@ -65,9 +63,18 @@ static inline int shouldInitializeSemaphores(icom_t *icom){
     return 1;
 }
 
+static inline int shouldUnbindSocket(icom_t *icom){
+    if(icom->type == ICOM_TYPE_PULL)
+        return 1;
+
+    return 0;
+}
+
 
 /*@ Initializes (if not initialized) and returns global ZMQ context */
 static void *getContext(){
+    static pthread_mutex_t lockGetContext;
+
     pthread_mutex_lock(&lockGetContext);
 
     if(zmqContext == NULL){
@@ -105,15 +112,22 @@ void icom_deinit(icom_t *icom){
     if(hasAllocatedBuffers(icom)){
         for(int i=0; i<icom->packetCount; i++){
             free(icom->packets[i].payload);
-
-            // destroy semaphores if any (TODO: refactor)
-            if( hasAllocatedBuffers(icom) && 
-                (icom->flags & ICOM_ZERO_COPY) &&
-                (icom->flags & ICOM_PROTECTED)){
-                sem_destroy(&icom->packets[i].semWrite);
-                sem_destroy(&icom->packets[i].semRead);
-            }
         }
+    }
+
+    /* destroy semaphores if they should have been allocated */
+    if(shouldInitializeSemaphores(icom)){
+        _D("Destroying semaphores");
+        for(int i=0; i<icom->packetCount; i++){
+            sem_destroy(&icom->packets[i].semWrite);
+            sem_destroy(&icom->packets[i].semRead);
+        }
+    }
+
+    /* unbind sockets if necesarry */
+    if(shouldUnbindSocket(icom)){
+        for(int i=0; i<icom->socketCount; i++)
+            zmq_unbind(icom->sockets[i].socket, icom->sockets[i].string);
     }
 
     /* closing all opened sockets */
@@ -137,23 +151,34 @@ void icom_deinit(icom_t *icom){
 int icom_initPackets(icom_t *icom, unsigned payloadSize){
     icom->packets = (icomPacket_t*)malloc(icom->packetCount*sizeof(icomPacket_t));
 
-    /* initialize packets */
-    for(int i=0; i<icom->packetCount; i++){
-        //(*packets)[i].header.type = ; TODO
-        (icom->packets)[i].header.size = payloadSize;
-        (icom->packets)[i].payload     = malloc(payloadSize);
+    _D("Allocated packets: %d", hasAllocatedBuffers(icom));
+    if(hasAllocatedBuffers(icom)){
+        _D("Initializing packets");
+        for(int i=0; i<icom->packetCount; i++){
+            //(*packets)[i].header.type = ; TODO
+            (icom->packets)[i].header.size = payloadSize;
+            (icom->packets)[i].payload     = malloc(payloadSize);
+        }
+    } else {
+        for(int i=0; i<icom->packetCount; i++)
+            (icom->packets)[i].payload = NULL;
     }
 
-    /* initialize semaphores */
     if( shouldInitializeSemaphores(icom)){
-        _I("Initializing semaphores");
+        _D("Initializing semaphores");
+        int ret;
         for(int i=0; i<icom->packetCount; i++){
-            sem_init(&icom->packets[i].semWrite, 0, 1);
-            sem_init(&icom->packets[i].semRead,  0, icom->socketCount);
+            ret = sem_init(&icom->packets[i].semWrite, 0, 1);
+            if(ret == -1)
+                _SW("Failed to initialize semaphore");
+
+            ret = sem_init(&icom->packets[i].semRead,  0, icom->socketCount);
+            if(ret == -1)
+                _SW("Failed to initialize semaphore");
         }
     }
 
-    /* create a linked list */
+    _D("Linking the list");
     for(int i=0; i<icom->packetCount-1; i++){
         (icom->packets)[i].next = &((icom->packets)[i+1]);
     }
@@ -224,27 +249,29 @@ icomPacket_t *icom_doPushZero(icom_t *icom){
 
 icomPacket_t *icom_doPushZeroProtected(icom_t *icom){
     /* acquire write semaphore */
-    _I("Push: Acquiring semaphore");
+    _D("Acquiring semaphore");
     sem_wait(&(icom->packets[icom->packetIndex].semWrite));
     
+    
     /* wait for the posted read semaphores (TODO: avoid polling) */
-    _I("Push: Checking read semaphore value");
+    _D("Checking read semaphore value");
     int sem_value;
     do{
         sem_getvalue(&(icom->packets[icom->packetIndex].semRead), &sem_value);
+        _D("sem_value: %d", sem_value);
     } while(sem_value != icom->socketCount);
 
     /* send packet sequence */
-    _I("Push: Sending packet sequence");
+    _D("Sending packet sequence");
     for(int i=0; i<icom->socketCount; i++)
         icom_sendPacketZero(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
 
     /* post write semaphore */
-    _I("Push: Posting semaphore");
+    _D("Posting semaphore");
     sem_post(&(icom->packets[icom->packetIndex].semWrite));
     
     /* update buffer index */
-    _I("Push: Updating packet index");
+    _D("Updating packet index");
     if(++icom->packetIndex >= icom->packetCount)
         icom->packetIndex = 0;
 
@@ -266,7 +293,7 @@ int icom_initPushSocket(icomSocket_t *socket, char *string){
     setSockopt(socket->socket, ZMQ_SNDHWM, 1);
 
     if( zmq_connect(socket->socket, socket->string) ){
-        _SE("Failed to bind ZMQ socket to \"%s\" string", socket->string);
+        _SE("Failed to connect ZMQ socket to \"%s\" string", socket->string);
         return -1;
     }
 
@@ -308,8 +335,8 @@ icom_t *icom_initPush(char *comString, unsigned payloadSize, unsigned packetCoun
     icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
 
     /* initialize buffers */
+    _D("Initializing buffers");
     icom_initPackets(icom, payloadSize);
-    //icom_initPackets(&(icom->packets), icom->packetCount, payloadSize, flags);
 
     return icom;
 }
@@ -358,24 +385,19 @@ icomPacket_t *icom_doPullZero(icom_t *icom){
 }
 
 icomPacket_t *icom_doPullZeroProtected(icom_t *icom){
-    static int not_first = 0;
-
     /* receive all buffers from all sockets */
     for(int i=0; i<icom->socketCount; i++){
-        _I("Pull: Posting previous semaphore");
-        if(not_first){ // otherwise can result in an error
+        if(icom->packets[i].payload != NULL){
+            _D("Posting previous semaphore");
             sem_post(&(icom->packets[i].semRead));
         }
 
-        _I("Pull: Receiving buffers");
+        _D("Receiving buffers");
         icom_recvPacketZero(&(icom->sockets[i]), &(icom->packets[i]));
 
-        _I("Pull: Acquiring semaphore");
+        _D("Acquiring semaphore");
         sem_wait(&(icom->packets[i].semRead));
     }
-
-    /* refactor */
-    not_first = 1;
 
     return icom->packets;
 }
@@ -416,6 +438,7 @@ icom_t *icom_initPull(char *comString, unsigned payloadSize, uint32_t flags){
     icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
     icom->flags  = flags;
     icom->type   = ICOM_TYPE_PULL;
+    icom->packetIndex = 0;
 
     /* check if zero copy is asked for (TODO: PROTECTED) */
     if(flags & ICOM_ZERO_COPY){
@@ -437,6 +460,7 @@ icom_t *icom_initPull(char *comString, unsigned payloadSize, uint32_t flags){
     icom_initPullSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
 
     /* initialize buffers */
+    _D("Initializing buffers");
     icom_initPackets(icom, payloadSize);
     //icom_initPackets(&(icom->packets), icom->packetCount, payloadSize, flags);
 
