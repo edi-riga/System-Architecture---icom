@@ -7,13 +7,15 @@ LFLAGS:=
 
 SRC:=$(shell find . -name "*.c")
 SRC+=$(shell find . -name "*.cpp")
-OBJ:=$(subst src/,obj/,$(SRC))
+SRC+=$(shell find ../testUtils/src/ -name "*.c")
+OBJ:=$(subst ../testUtils/,./,$(SRC))
+OBJ:=$(subst src/,obj/,$(OBJ))
 OBJ:=$(subst .cpp,.o,$(OBJ))
 OBJ:=$(subst .c,.o,$(OBJ))
 
 OUT:=out/main.elf
 DIR:=$(sort $(dir $(OBJ))) $(sort $(dir $(OUT)))
-INC:=-Iinc -I../../inc
+INC:=-Iinc -I../../inc -I../testUtils/inc
 LIB:=-pthread -L../../out -l:libicom.a -lzmq
 
 all:$(DIR) $(OUT)
@@ -32,6 +34,9 @@ obj/%.o: src/%.c
 
 obj/%.o: src/%.cpp
 	$(CROSS_COMPILE)$(CPP) $(CFLAGS) $(INC) -c -o $@ $<
+
+obj/%.o: ../testUtils/src/%.c
+	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 clean:
 	rm -fr $(DIR)

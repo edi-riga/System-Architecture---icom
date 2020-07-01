@@ -4,20 +4,9 @@
 #include <pthread.h>
 #include <signal.h>
 #include "icom.h"
+#include "testUtils.h"
 
 #define _I(fmt, args...)   printf(fmt "\n", ##args)
-#define COLOR_DEFAULT  "\033[0m"
-#define COLOR_RED      "\033[1;31m"
-#define COLOR_GREEN    "\033[0;32m"
-
-#define TEST(testName, assert)                                                 \
-{                                                                              \
-   if(assert){                                                                \
-      printf("TEST: %-60s %s%s%s\n", testName, COLOR_GREEN, "PASSED", COLOR_DEFAULT);\
-   } else {                                                                   \
-      printf("TEST: %-60s %s%s%s\n", testName, COLOR_RED,   "FAILED", COLOR_DEFAULT);\
-   }                                                                          \
-}
 
 static void handler_sigsegv(int sig){
     TEST("Check against segmentation exception", 0);
@@ -29,7 +18,7 @@ int main(void){
     int ret = 0;
     icom_t *icomPush, *icomPull;
 
-    signal(SIGSEGV, handler_sigsegv);
+    testUtilsStart();
 
     ret = icom_init();
     TEST("API initialization", ret == 0);
@@ -113,6 +102,9 @@ int main(void){
 
     icom_release();
     TEST("API deinitialization", 1);
+
+
+    testUtilsStop();
 
     return 0;
 }
