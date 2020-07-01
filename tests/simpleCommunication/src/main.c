@@ -6,7 +6,7 @@
 #include "timer.h"
 
 #define _I(fmt, args...)   printf(fmt "\n", ##args); fflush(stdout)
-#define PAYLOAD_SIZE    1024*1024
+#define PAYLOAD_SIZE    1024
 #define TRANSFER_COUNT  8*1024
 
 
@@ -111,42 +111,45 @@ int main(void){
     _I("Initializing icom API");
     icom_init();
 
-    _I("Initializing pthreads (deep data copy experiment)");
-    timer_us_start();
-    pthread_create(&pidTx, NULL, thread_push, "inproc://tmp");
-    pthread_create(&pidRx, NULL, thread_pull, "inproc://tmp");
+    for(int i=0; i<100; i++){
+    
+        _I("Initializing pthreads (deep data copy experiment)");
+        timer_us_start();
+        pthread_create(&pidTx, NULL, thread_push, "inproc://tmp");
+        pthread_create(&pidRx, NULL, thread_pull, "inproc://tmp");
 
-    _I("Waiting for threads to finish");
-    pthread_join(pidTx, NULL);
-    pthread_join(pidRx, NULL);
-    timeDeep = timer_us_stop();
-
-
-    _I("Initializing pthreads (zero data copy experiment)");
-    timer_us_start();
-    pthread_create(&pidTx, NULL, thread_pushZero, "inproc://tmp");
-    pthread_create(&pidRx, NULL, thread_pullZero, "inproc://tmp");
-
-    _I("Waiting for threads to finish");
-    pthread_join(pidTx, NULL);
-    pthread_join(pidRx, NULL);
-    timeZero = timer_us_stop();
+        _I("Waiting for threads to finish");
+        pthread_join(pidTx, NULL);
+        pthread_join(pidRx, NULL);
+        timeDeep = timer_us_stop();
 
 
-    _I("Initializing pthreads (zero data protected copy experiment)");
-    timer_us_start();
-    pthread_create(&pidTx, NULL, thread_pushZeroProtected, "inproc://tmp");
-    pthread_create(&pidRx, NULL, thread_pullZeroProtected, "inproc://tmp");
+        _I("Initializing pthreads (zero data copy experiment)");
+        timer_us_start();
+        pthread_create(&pidTx, NULL, thread_pushZero, "inproc://tmp");
+        pthread_create(&pidRx, NULL, thread_pullZero, "inproc://tmp");
 
-    _I("Waiting for threads to finish");
-    pthread_join(pidTx, NULL);
-    pthread_join(pidRx, NULL);
-    timeZeroProtected = timer_us_stop();
+        _I("Waiting for threads to finish");
+        pthread_join(pidTx, NULL);
+        pthread_join(pidRx, NULL);
+        timeZero = timer_us_stop();
 
 
-    _I("TIME (with deep copy):           %u us", timeDeep);
-    _I("TIME (with zero copy):           %u us", timeZero);
-    _I("TIME (with zero copy, prtected): %u us", timeZeroProtected);
+        _I("Initializing pthreads (zero data protected copy experiment)");
+        timer_us_start();
+        pthread_create(&pidTx, NULL, thread_pushZeroProtected, "inproc://tmp");
+        pthread_create(&pidRx, NULL, thread_pullZeroProtected, "inproc://tmp");
+
+        _I("Waiting for threads to finish");
+        pthread_join(pidTx, NULL);
+        pthread_join(pidRx, NULL);
+        timeZeroProtected = timer_us_stop();
+
+
+        _I("TIME (with deep copy):           %u us", timeDeep);
+        _I("TIME (with zero copy):           %u us", timeZero);
+        _I("TIME (with zero copy, prtected): %u us", timeZeroProtected);
+    }
 
     _I("Deinitializing icom API");
     icom_release();
