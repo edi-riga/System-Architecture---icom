@@ -100,8 +100,9 @@ void setSockopt(void *socket, int name, int value){
 /*============================================================================*/
 /*                             ICOM COMMON - API                              */
 /*============================================================================*/
-void icom_init(){
+int icom_init(){
     getContext();  // initializes zmq context
+    return 0;
 }
 
 void icom_release(){
@@ -337,8 +338,12 @@ int icom_initPushSocket(icomSocket_t *socket, char *string){
 int icom_initPushSockets(icomSocket_t **sockets, unsigned socketCount, char** comStrings){
     *sockets = (icomSocket_t*)malloc(socketCount*sizeof(icomSocket_t));
 
-    for(int i=0; i<socketCount; i++)
-        icom_initPushSocket(*sockets+i, comStrings[i]);
+    for(int i=0; i<socketCount; i++){
+        if(icom_initPushSocket(*sockets+i, comStrings[i]) != 0 ){
+            _E("Failed to initialize PULL socket");
+            return -1;
+        }
+    }
 
     return 0;
 }
@@ -363,14 +368,23 @@ icom_t *icom_initPush(char *comString, unsigned payloadSize, unsigned packetCoun
     }
 
     /* parse communication strings */
-    parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
+    int ret = parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
+    if(ret != 0){
+        _E("Failed to parse communication string");
+        return NULL;
+    }
 
-    /* initialize sockets */
-    icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
+    ret = icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
+    if(ret != 0){
+        _E("Failed to initialize PUSH sockets");
+        return NULL;
+    }
 
-    /* initialize buffers */
-    _D("Initializing buffers");
-    icom_initPackets(icom, payloadSize);
+    ret = icom_initPackets(icom, payloadSize);
+    if(ret != 0){
+        _E("Failed to initialize packets");
+        return NULL;
+    }
 
     return icom;
 }
@@ -461,8 +475,12 @@ int icom_initPullSocket(icomSocket_t *socket, char *string){
 int icom_initPullSockets(icomSocket_t **sockets, unsigned socketCount, char** comStrings){
     *sockets = (icomSocket_t*)malloc(socketCount*sizeof(icomSocket_t));
 
-    for(int i=0; i<socketCount; i++)
-        icom_initPullSocket(*sockets+i, comStrings[i]);
+    for(int i=0; i<socketCount; i++){
+        if(icom_initPullSocket(*sockets+i, comStrings[i]) != 0){
+            _E("Failed to initialize PULL socket");
+            return -1;
+        }
+    }
 
     return 0;
 }
@@ -485,18 +503,25 @@ icom_t *icom_initPull(char *comString, unsigned payloadSize, uint32_t flags){
         icom->cbDo     = icom_doPullDeep; 
     }
 
+    int ret = parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
+    if(ret != 0){
+        _E("Failed to parse communication string");
+        return NULL;
+    }
 
-    /* parse communication strings */
-    parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
     icom->packetCount = icom->socketCount;
 
-    /* initialize sockets */
-    icom_initPullSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
+    ret = icom_initPullSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
+    if(ret != 0){
+        _E("Failed to initialize PULL sockets");
+        return NULL;
+    }
 
-    /* initialize buffers */
-    _D("Initializing buffers");
-    icom_initPackets(icom, payloadSize);
-    //icom_initPackets(&(icom->packets), icom->packetCount, payloadSize, flags);
+    ret = icom_initPackets(icom, payloadSize);
+    if(ret != 0){
+        _E("Failed to initialize packets");
+        return NULL;
+    }
 
     return icom;
 }

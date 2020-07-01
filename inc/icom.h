@@ -80,7 +80,7 @@ typedef struct icom_t{
 
 
 /*@ TODO */
-void icom_init();
+int icom_init();
 
 
 /*@ TODO */
@@ -129,61 +129,90 @@ static inline icomPacket_t *icom_do(icom_t *icom){
 icomPacket_t *icom_getCurrentPacket(icom_t *icom);
 
 
-///*@ TODO */
-//static inline void icom_deinit(icom_t *icom){
-//    icom->cbDeinit(icom);
-//}
-//
-//
-//
-///*@ TODO */
-//icomPacket_t *icom_doPush(icom_t *icom);
-//
-//
-///*@ TODO */
-//icomPacket_t *icom_doPull(icom_t *icom);
+/*@ Front (begining) buffer iteration macros to comfortably iterate trough all
+ * of the buffers inside a receive buffer linked list where presumably each 
+ * buffer in the linked list has been received from a different thread. An 
+ * example usage would be when your PULL thread anticipates transactions from
+ * multiple (or just a single) threads. The macro provides a direct access to 
+ * the received buffer, probably should be used when the buffer size is known
+ * and static. 
+ *
+ * USAGE:
+ * ICOM_FOR_EACH_BUFFER(icom, buffer)
+ *    <do work with the buffer>
+ * ICOM_FOR_EACH_BUFFER_END(icom, buffer)
+ *
+ * */
+#define ICOM_FOR_EACH_BUFFER(icom, buffer)                                     \
+do{                                                                            \
+    buffer = (typeof(buffer))packet->payload;
 
 
-/******************** Legacy ********************/
+/*@ Front (begining) buffer iteration macros to comfortably iterate trough all
+ * of the buffers inside a receive buffer linked list where presumably each 
+ * buffer in the linked list has been received from a different thread. An 
+ * example usage would be when your PULL thread anticipates transactions from
+ * multiple (or just a single) threads. The macro provides a direct access to 
+ * the received buffer and its size, probably should be used in cases when the 
+ * buffer size can vary between transactions and/or sources.
+ *
+ * USAGE:
+ * ICOM_FOR_EACH_BUFFER_SIZE(icom, buffer, size)
+ *    <do work with the buffer>
+ * ICOM_FOR_EACH_BUFFER_END(icom, buffer)
+ *
+ * */
+#define ICOM_FOR_EACH_BUFFER_SIZE(icom, buffer, size)                          \
+do{                                                                            \
+    buffer = (typeof(buffer))packet->payload;                                  \
+    size   = (typeof(size))packet->header.size;
 
-// legacy
-//typedef struct icomLBuffer_t {
-//    struct icomLBuffer_t *next;
-//    uint32_t              size;
-//    void                 *data;
-//} icomLBuffer_t;
 
-/*@ struct Linked list of specialized icom buffers which are used to 
- *         implement simultanious operations of writing/reading buffers 
- *         by different threads */
-//typedef struct icomBuffer_t{
-//    struct icomBuffer_t *next; //@ next buffer, or NULL for the last buffer
-//    unsigned size;             //@ size of the memory buffer
-//    void *mem;                 //@ data
-//} icomBuffer_t;
+/*@ Front (begining) buffer iteration macros to comfortably perform transactions 
+ * and iterate trough all of the buffers inside a receive buffer linked list 
+ * where presumably each buffer in the linked list has been received from a 
+ * different thread. An example usage would be when your PULL thread anticipates
+ * transactions from multiple (or just a single) threads. The macro provides a 
+ * direct access to the received buffer, probably should be used when the buffer
+ * size is known and static. 
+ *
+ * USAGE:
+ * ICOM_DO_FOR_EACH_BUFFER(icom, buffer)
+ *    <do work with the buffer>
+ * ICOM_FOR_EACH_BUFFER_END(icom, buffer)
+ *
+ * */
+#define ICOM_DO_AND_FOR_EACH_BUFFER(icom, buffer)                              \
+buffer = icom_do(icom);                                                        \
+ICOM_FOR_EACH_BUFFER(icom, buffer)
 
 
-/*@ struct Descriptor of a single communication socket */
-//typedef struct {
-//    char *string;  //@ string identifier of the communication
-//    void *socket;  //@ socket descriptor
-//    int  inproc;   //@ flag that socket is used for in-process communication
-//    struct icomEntry_t *entry;
-//} icomSocket_t;
+/*@ Front (begining) buffer iteration macros to comfortably perform transactions
+ * and iterate trough all of the buffers inside a receive buffer linked list
+ * where presumably each buffer in the linked list has been received from a
+ * different thread. An example usage would be when your PULL thread anticipates
+ * transactions from multiple (or just a single) threads. The macro provides a
+ * direct access to the received buffer and its size, probably should be used in
+ * cases when the buffer size can vary between transactions and/or sources.
+ *
+ * USAGE:
+ * ICOM_DO_FOR_EACH_BUFFER(icom, buffer, size)
+ *    <do work with the buffer>
+ * ICOM_FOR_EACH_BUFFER_END(icom, buffer)
+ *
+ * */
+#define ICOM_DO_AND_FOR_EACH_BUFFER_SIZE(icom, buffer, size)                   \
+buffer = icom_do(icom);                                                        \
+ICOM_FOR_EACH_BUFFER(icom, buffer, size)
 
-/*@ struct Communication descriptor */
-//typedef struct icom_t{
-//    unsigned type;          //@ communication type 
-//    unsigned socketCount;   //@ number of associated sockets
-//    unsigned bufferCount;   //@ number of associated buffers
-//    unsigned bufferIdx;     //@ index of the current buffer
-//    char   **comStrings;    //@ communication string
-//    icomSocket_t *sockets;  //@ array of sokets
-//    icomBuffer_t *buffers;  //@ array of buffers
-//    icomBuffer_t* (*cbDo)(struct icom_t *icom);     //@ TODO
-//    void          (*cbDeinit)(struct icom_t *icom); //@ TODO
-//    void          (*cbTimeout)(char *str);          //@ TODO
-//} icom_t;
+/*@ Back (ending) buffer iteration macros, used to terminate any previously
+ * defined iteration macro.
+ *
+ * */
+#define ICOM_FOR_EACH_END(icom, buffer)                                        \
+    buffer = buffer->next;                                                     \
+}                                                                              \
+while( buffer!=NULL );
 
 
 #endif
