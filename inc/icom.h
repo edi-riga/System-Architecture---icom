@@ -138,12 +138,12 @@ icomPacket_t *icom_getCurrentPacket(icom_t *icom);
  * and static. 
  *
  * USAGE:
- * ICOM_FOR_EACH_BUFFER(icom, buffer)
+ * ICOM_FOR_EACH_BUFFER(packet, buffer)
  *    <do work with the buffer>
- * ICOM_FOR_EACH_BUFFER_END(icom, buffer)
+ * ICOM_FOR_EACH_BUFFER_END
  *
  * */
-#define ICOM_FOR_EACH_BUFFER(icom, buffer)                                     \
+#define ICOM_FOR_EACH_BUFFER(packet, buffer)                                   \
 do{                                                                            \
     buffer = (typeof(buffer))packet->payload;
 
@@ -157,12 +157,12 @@ do{                                                                            \
  * buffer size can vary between transactions and/or sources.
  *
  * USAGE:
- * ICOM_FOR_EACH_BUFFER_SIZE(icom, buffer, size)
+ * ICOM_FOR_EACH_BUFFER_SIZE(packet, buffer, size)
  *    <do work with the buffer>
- * ICOM_FOR_EACH_BUFFER_END(icom, buffer)
+ * ICOM_FOR_EACH_BUFFER_END
  *
  * */
-#define ICOM_FOR_EACH_BUFFER_SIZE(icom, buffer, size)                          \
+#define ICOM_FOR_EACH_BUFFER_SIZE(packet, buffer, size)                        \
 do{                                                                            \
     buffer = (typeof(buffer))packet->payload;                                  \
     size   = (typeof(size))packet->header.size;
@@ -179,12 +179,13 @@ do{                                                                            \
  * USAGE:
  * ICOM_DO_FOR_EACH_BUFFER(icom, buffer)
  *    <do work with the buffer>
- * ICOM_FOR_EACH_BUFFER_END(icom, buffer)
+ * ICOM_FOR_EACH_BUFFER_END
  *
  * */
 #define ICOM_DO_AND_FOR_EACH_BUFFER(icom, buffer)                              \
-buffer = icom_do(icom);                                                        \
-ICOM_FOR_EACH_BUFFER(icom, buffer)
+icomPacket_t *_tmpPacket;                                                      \
+_tmpPacket = icom_do(icom);                                                    \
+ICOM_FOR_EACH_BUFFER(_tmpPacket, buffer)
 
 
 /*@ Front (begining) buffer iteration macros to comfortably perform transactions
@@ -198,21 +199,51 @@ ICOM_FOR_EACH_BUFFER(icom, buffer)
  * USAGE:
  * ICOM_DO_FOR_EACH_BUFFER(icom, buffer, size)
  *    <do work with the buffer>
- * ICOM_FOR_EACH_BUFFER_END(icom, buffer)
+ * ICOM_FOR_EACH_BUFFER_END
  *
  * */
 #define ICOM_DO_AND_FOR_EACH_BUFFER_SIZE(icom, buffer, size)                   \
-buffer = icom_do(icom);                                                        \
-ICOM_FOR_EACH_BUFFER(icom, buffer, size)
+icomPacket_t *_tmpPacket;                                                      \
+_tmpPacket = icom_do(icom);                                                    \
+ICOM_FOR_EACH_BUFFER_SIZE(_tmpPacket, buffer, size)
+
 
 /*@ Back (ending) buffer iteration macros, used to terminate any previously
  * defined iteration macro.
  *
  * */
-#define ICOM_FOR_EACH_END(icom, buffer)                                        \
-    buffer = buffer->next;                                                     \
+#define ICOM_FOR_EACH_END                                                      \
+    _tmpPacket = _tmpPacket->next;                                             \
 }                                                                              \
-while( buffer!=NULL );
+while( _tmpPacket!=NULL );
+
+
+/*@ Macro attempts to perform a transaction of the previously configured icom 
+ * communication. By a large extent the macro is not necessary but is provided
+ * the symetry of the API.
+ * */
+#define ICOM_DO(icom)                                                          \
+icom_do(icom);
+
+
+/*@ Macro retreiving buffer (payload) from the icom communication descriptor. By
+ * a large extent the macro is not necessary but is provided the symetry of the 
+ * API.
+ * */
+#define ICOM_GET_BUFFER(icom, buffer)                                          \
+icomPacket_t *_tmpPacket = icom_getCurrentPacket(icom);                        \
+buffer = (typeof(buffer))_tmpPacket->payload;
+
+
+/*@ Macro retreiving buffer (payload) and its size from the icom communication 
+ * descriptor. By a large extent the macro is not necessary but is provided the
+ * symetry of the API.
+ * */
+#define ICOM_GET_BUFFER_SIZE(icom, buffer, size)                               \
+icomPacket_t *_tmpPacket = icom_getCurrentPacket(icom);                        \
+do{                                                                            \
+    buffer = (typeof(buffer))_tmpPacket->payload;                              \
+    size   = (typeof(size))_tmpPacket->header.size;
 
 
 #endif
