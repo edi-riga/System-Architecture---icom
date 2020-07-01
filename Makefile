@@ -1,6 +1,6 @@
 CC:=gcc
 CPP:=g++
-CROSS_COMPILE:=
+CROSS_COMPILE?=
 
 CFLAGS:=-Wall -fPIC
 LFLAGS:=
