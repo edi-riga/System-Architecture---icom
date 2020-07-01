@@ -4,92 +4,49 @@
 #include <pthread.h>
 #include "icom.h"
 #include "timer.h"
+#include "testUtils.h"
 
 #define _I(fmt, args...)   printf(fmt "\n", ##args); fflush(stdout)
 #define PAYLOAD_SIZE    1024
-#define TRANSFER_COUNT  8*1024
+#define TRANSFER_COUNT  8
 
+/* test messages */
+const char *TEST_MSG_DEFAULT   = "PUSH-PULL communication";
+const char *TEST_MSG_ZERO_COPY = "PUSH-PULL communication (ZERO COPY)";
+const char *TEST_MSG_PROTECTED = "PUSH-PULL communication (ZERO COPY, PROTECTED)";
+
+/* globals for tests */
+int32_t flags = ICOM_DEFAULT;
+const char *testMsg;
 
 void *thread_push(void *arg){
-    icom_t *icom = icom_initPush((char*)arg, PAYLOAD_SIZE, 2, 0);
+    icom_t *icom = icom_initPush((char*)arg, PAYLOAD_SIZE, 2, flags);
+    int *buffer;
 
-    icomPacket_t *packet = icom_getCurrentPacket(icom);
     for(int i=0; i<TRANSFER_COUNT; i++){
-        ((int*)(packet->payload))[0] = i;
-        packet = icom_do(icom);
+        ICOM_GET_BUFFER(icom, buffer);
+
+        buffer[0] = i;
+
+        ICOM_DO(icom);
     }
 
+    usleep(100); //TODO: Missing packet if deinit before data is sent
     icom_deinit(icom);
     return NULL;
 }
 
 void *thread_pull(void *arg){
-    icom_t *icom = icom_initPull((char*)arg, PAYLOAD_SIZE, 0);
+    icom_t *icom = icom_initPull((char*)arg, PAYLOAD_SIZE, flags);
+    int *buffer;
 
     icomPacket_t *packet = icom_getCurrentPacket(icom);
     for(int i=0; i<TRANSFER_COUNT; i++){
-        packet = icom_do(icom);
-        do{
-            packet = packet->next;
-        } while(packet != NULL);
-    }
+        ICOM_DO_AND_FOR_EACH_BUFFER(icom, buffer);
 
-    icom_deinit(icom);
-    return NULL;
-}
+        TEST(testMsg, *buffer == i);
 
-
-void *thread_pushZero(void *arg){
-    icom_t *icom = icom_initPush((char*)arg, PAYLOAD_SIZE, 2, ICOM_ZERO_COPY);
-
-    icomPacket_t *packet = icom_getCurrentPacket(icom);
-    for(int i=0; i<TRANSFER_COUNT; i++){
-        ((int*)(packet->payload))[0] = i;
-        packet = icom_do(icom);
-    }
-
-    icom_deinit(icom);
-    return NULL;
-}
-
-void *thread_pullZero(void *arg){
-    icom_t *icom = icom_initPull((char*)arg, PAYLOAD_SIZE, ICOM_ZERO_COPY);
-
-    icomPacket_t *packet = icom_getCurrentPacket(icom);
-    for(int i=0; i<TRANSFER_COUNT; i++){
-        packet = icom_do(icom);
-        do{
-            packet = packet->next;
-        } while(packet != NULL);
-    }
-
-    icom_deinit(icom);
-    return NULL;
-}
-
-
-void *thread_pushZeroProtected(void *arg){
-    icom_t *icom = icom_initPush((char*)arg, PAYLOAD_SIZE, 2, ICOM_ZERO_COPY | ICOM_PROTECTED);
-
-    icomPacket_t *packet = icom_getCurrentPacket(icom);
-    for(int i=0; i<TRANSFER_COUNT; i++){
-        ((int*)(packet->payload))[0] = i;
-        packet = icom_do(icom);
-    }
-
-    icom_deinit(icom);
-    return NULL;
-}
-
-void *thread_pullZeroProtected(void *arg){
-    icom_t *icom = icom_initPull((char*)arg, PAYLOAD_SIZE, ICOM_ZERO_COPY | ICOM_PROTECTED);
-
-    icomPacket_t *packet = icom_getCurrentPacket(icom);
-    for(int i=0; i<TRANSFER_COUNT; i++){
-        packet = icom_do(icom);
-        do{
-            packet = packet->next;
-        } while(packet != NULL);
+        ICOM_FOR_EACH_END;
     }
 
     icom_deinit(icom);
@@ -105,45 +62,47 @@ int main(void){
     _I("Initializing icom API");
     icom_init();
 
-    for(int i=0; i<100; i++){
-    
-        _I("Initializing pthreads (deep data copy experiment)");
-        timer_us_start();
-        pthread_create(&pidTx, NULL, thread_push, "inproc://tmp");
-        pthread_create(&pidRx, NULL, thread_pull, "inproc://tmp");
+    _I("Initializing pthreads (deep data copy experiment)");
+    testMsg = TEST_MSG_DEFAULT;
+    flags   = ICOM_DEFAULT;
+    timer_us_start();
+    pthread_create(&pidTx, NULL, thread_push, "inproc://tmp0");
+    pthread_create(&pidRx, NULL, thread_pull, "inproc://tmp0");
 
-        _I("Waiting for threads to finish");
-        pthread_join(pidTx, NULL);
-        pthread_join(pidRx, NULL);
-        timeDeep = timer_us_stop();
-
-
-        _I("Initializing pthreads (zero data copy experiment)");
-        timer_us_start();
-        pthread_create(&pidTx, NULL, thread_pushZero, "inproc://tmp");
-        pthread_create(&pidRx, NULL, thread_pullZero, "inproc://tmp");
-
-        _I("Waiting for threads to finish");
-        pthread_join(pidTx, NULL);
-        pthread_join(pidRx, NULL);
-        timeZero = timer_us_stop();
+    _I("Waiting for threads to finish");
+    pthread_join(pidTx, NULL);
+    pthread_join(pidRx, NULL);
+    timeDeep = timer_us_stop();
 
 
-        _I("Initializing pthreads (zero data protected copy experiment)");
-        timer_us_start();
-        pthread_create(&pidTx, NULL, thread_pushZeroProtected, "inproc://tmp");
-        pthread_create(&pidRx, NULL, thread_pullZeroProtected, "inproc://tmp");
+    _I("Initializing pthreads (zero data copy experiment)");
+    testMsg = TEST_MSG_ZERO_COPY;
+    flags   = ICOM_ZERO_COPY;
+    timer_us_start();
+    pthread_create(&pidTx, NULL, thread_push, "inproc://tmp1");
+    pthread_create(&pidRx, NULL, thread_pull, "inproc://tmp1");
 
-        _I("Waiting for threads to finish");
-        pthread_join(pidTx, NULL);
-        pthread_join(pidRx, NULL);
-        timeZeroProtected = timer_us_stop();
+    _I("Waiting for threads to finish");
+    pthread_join(pidTx, NULL);
+    pthread_join(pidRx, NULL);
+    timeZero = timer_us_stop();
 
 
-        _I("TIME (with deep copy):           %u us", timeDeep);
-        _I("TIME (with zero copy):           %u us", timeZero);
-        _I("TIME (with zero copy, prtected): %u us", timeZeroProtected);
-    }
+    _I("Initializing pthreads (zero data protected copy experiment)");
+    testMsg = TEST_MSG_PROTECTED;
+    flags   = ICOM_PROTECTED;
+    timer_us_start();
+    pthread_create(&pidTx, NULL, thread_push, "inproc://tmp2");
+    pthread_create(&pidRx, NULL, thread_pull, "inproc://tmp2");
+
+    _I("Waiting for threads to finish");
+    pthread_join(pidTx, NULL);
+    pthread_join(pidRx, NULL);
+    timeZeroProtected = timer_us_stop();
+
+    _I("TIME (with deep copy):           %u us", timeDeep);
+    _I("TIME (with zero copy):           %u us", timeZero);
+    _I("TIME (with zero copy, prtected): %u us", timeZeroProtected);
 
     _I("Deinitializing icom API");
     icom_release();
