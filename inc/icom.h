@@ -231,8 +231,10 @@ icom_do(icom);
  * API.
  * */
 #define ICOM_GET_BUFFER(icom, buffer)                                          \
+{                                                                              \
 icomPacket_t *_tmpPacket = icom_getCurrentPacket(icom);                        \
-buffer = (typeof(buffer))_tmpPacket->payload;
+buffer = (typeof(buffer))_tmpPacket->payload;                                  \
+}
 
 
 /*@ Macro retreiving buffer (payload) and its size from the icom communication 
@@ -245,5 +247,22 @@ do{                                                                            \
     buffer = (typeof(buffer))_tmpPacket->payload;                              \
     size   = (typeof(size))_tmpPacket->header.size;
 
+
+#define ICOM_DO_AND_GET_BUFFER(icom, buffer)                                   \
+icom_do(icom);                                                                 \
+{                                                                              \
+icomPacket_t *_tmpPacket = icom_getCurrentPacket(icom);                        \
+buffer = (typeof(buffer))_tmpPacket->payload;                                  \
+}
+
+//TODO: Macros for buffer initialization
+//#define ICOM_INIT_FOR_EACH_BUFFER(icom, buffer)                                \
+//icomPacket_t *_tmpPacket;                                                      \
+//for(int _idx=0; _idx<icom->packetCount; _idx++){                               \
+//    buffer = (typeof(buffer))_tmpPacket->payload;
+//
+//
+//#define ICOM_INIT_FOR_EACH_BUFFER_END                                          \
+//}
 
 #endif
