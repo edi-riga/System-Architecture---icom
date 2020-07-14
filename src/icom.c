@@ -22,8 +22,8 @@
 #if DEBUG
     #define _D(fmt,args...)  printf("DEBUG:%s:%u: "fmt "\n", __func__, __LINE__, ##args); fflush(stdout)
 #else
-    //#define _D(fmt,args...)  printf("DEBUG:%s:%u: "fmt "\n", __func__, __LINE__, ##args); fflush(stdout)
-    #define _D(fmt,args...)    
+    #define _D(fmt,args...)  printf("DEBUG:%s:%u: "fmt "\n", __func__, __LINE__, ##args); fflush(stdout)
+    //#define _D(fmt,args...)    
 #endif
 
 
@@ -529,10 +529,31 @@ icom_t *icom_initPull(char *comString, unsigned payloadSize, uint32_t flags){
 /******************************************************************************/
 /****************************** PUBLISH SOCKETS *******************************/
 /******************************************************************************/
+char *tmp_topic = "tmp_topic:";
 icomPacket_t *icom_doPubDeep(icom_t *icom){
     /* send packet sequence */
-    for(int i=0; i<icom->socketCount; i++)
-        icom_sendPacket(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
+    for(int i=0; i<icom->socketCount; i++){
+        void *socket = icom->sockets[i].socket;
+        icomPacket_t *packet = &(icom->packets[icom->packetIndex]);
+
+        // send topic
+        _D("Sending topic");
+        zmq_send(socket, tmp_topic, strlen(tmp_topic), ZMQ_SNDMORE);
+
+        _D("Sending header");
+        zmq_send(socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
+
+        _D("Sending topic");
+        zmq_send(socket, tmp_topic, strlen(tmp_topic), ZMQ_SNDMORE);
+
+        _D("Sending payload");
+        zmq_send(socket, packet->payload, packet->header.size, 0);
+
+        //_D("Sending payload");
+        //return zmq_send(socket->socket, packet->payload, packet->header.size, 0);
+        //    // send packet
+        //    icom_sendPacket(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
+    }
 
     /* update buffer index */
     if(++icom->packetIndex >= icom->packetCount)
@@ -572,11 +593,17 @@ int icom_initPubSockets(icomSocket_t **sockets, unsigned socketCount, char** com
     return 0;
 }
 
-icom_t *icom_initPublish(char *comString, unsigned payloadSize, uint32_t flags){
+icom_t *icom_initPublish(
+char *comString,
+unsigned payloadSize,
+unsigned packetCount,
+uint32_t flags)
+{
     /* allocate and initialize icom structure */
-    icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
-    icom->flags  = flags;
-    icom->type   = ICOM_TYPE_PUB;
+    icom_t *icom      = (icom_t*)malloc(sizeof(icom_t));
+    icom->packetCount = packetCount;
+    icom->flags       = flags;
+    icom->type        = ICOM_TYPE_PUB;
     icom->packetIndex = 0;
 
     /* check if zero copy is asked for */
@@ -621,10 +648,37 @@ icom_t *icom_initPublish(char *comString, unsigned payloadSize, uint32_t flags){
 /******************************************************************************/
 /***************************** SUBSCRIBE SOCKETS ******************************/
 /******************************************************************************/
+char *tmp_container[256];
 icomPacket_t *icom_doSubDeep(icom_t *icom){
     /* receive all buffers from all sockets */
     for(int i=0; i<icom->socketCount; i++){
-        icom_recvPacket(&(icom->sockets[i]), &(icom->packets[i]));
+        void *socket = icom->sockets[i].socket;
+        icomPacket_t *packet = &(icom->packets[icom->packetIndex]);
+
+        // send topic
+        _D("Receiving topic");
+        zmq_recv(socket, tmp_container, strlen(tmp_topic), 0);
+
+        _D("Receiving header");
+        zmq_recv(socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
+
+        _D("Receiving topic");
+        zmq_recv(socket, tmp_container, strlen(tmp_topic), 0);
+
+        _D("Receiving payload");
+        zmq_recv(socket, packet->payload, packet->header.size, 0);
+
+        //_D("Receiving header");
+        //zmq_recv(socket->socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
+
+        //_D("Receiving payload");
+        //return zmq_recv(socket->socket, packet->payload, packet->header.size, 0);
+
+
+        //_D("Sending topic");
+        //zmq_send(socket, tmp_topic, strlen(tmp_topic), ZMQ_SNDMORE);
+
+        //icom_recvPacket(&(icom->sockets[i]), &(icom->packets[i]));
     }
 
     return icom->packets;
@@ -644,6 +698,8 @@ int icom_initSubSocket(icomSocket_t *socket, char *string){
         _SE("Failed to connect ZMQ socket to \"%s\" string", socket->string);
         return -1;
     }
+
+    zmq_setsockopt(socket->socket, ZMQ_SUBSCRIBE, tmp_topic, strlen(tmp_topic));
 
     return 0;
 }
