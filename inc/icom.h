@@ -97,14 +97,32 @@ void icom_release();
 icom_t *icom_initPush(char* comString, unsigned bufferSize, unsigned bufferCount, uint32_t flags);
 
 
-/*@ Initialization of the icom PUSH-PULL communication sink, note that 
- *      there is no need for bufferSize
+/*@ Initialization of the icom PUSH-PULL communication sink
  *
  *  @param comString   TODO
  *  @param bufferSize  TODO
  *
  *  @return Returns icom communication descriptor */
 icom_t *icom_initPull(char *comString, unsigned bufferSize, uint32_t flags);
+
+
+/*@ Initialization of the icom PUBLISHER
+ *
+ *  @param comString   TODO
+ *  @param bufferSize  TODO
+ *  @param bufferCount TODO
+ *
+ *  @return Returns icom communication descriptor */
+icom_t *icom_initPublish(char *comString, unsigned payloadSize, uint32_t flags);
+
+
+/*@ Initialization of the icom SUBSCRIBER
+ *
+ *  @param comString   TODO
+ *  @param bufferSize  TODO
+ *
+ *  @return Returns icom communication descriptor */
+icom_t *icom_initSubscribe(char *comString, unsigned payloadSize, uint32_t flags);
 
 
 /*@ TODO */

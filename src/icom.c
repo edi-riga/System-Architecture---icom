@@ -526,6 +526,187 @@ icom_t *icom_initPull(char *comString, unsigned payloadSize, uint32_t flags){
     return icom;
 }
 
+/******************************************************************************/
+/****************************** PUBLISH SOCKETS *******************************/
+/******************************************************************************/
+icomPacket_t *icom_doPubDeep(icom_t *icom){
+    /* send packet sequence */
+    for(int i=0; i<icom->socketCount; i++)
+        icom_sendPacket(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
+
+    /* update buffer index */
+    if(++icom->packetIndex >= icom->packetCount)
+        icom->packetIndex = 0;
+    
+    return &(icom->packets[icom->packetIndex]);
+}
+
+int icom_initPubSocket(icomSocket_t *socket, char *string){
+    socket->string = string;
+    socket->inproc = (strstr("inproc", string) != NULL)? 1 : 0;
+
+    socket->socket = zmq_socket(getContext(), ZMQ_PUB);
+    if(socket->socket == NULL){
+        _SE("Failed to create ZMQ socket");
+        return -1;
+    }
+
+    if( zmq_bind(socket->socket, socket->string) ){
+        _SE("Failed to bind ZMQ socket to \"%s\" string", socket->string);
+        return -1;
+    }
+
+    return 0;
+}
+
+int icom_initPubSockets(icomSocket_t **sockets, unsigned socketCount, char** comStrings){
+    *sockets = (icomSocket_t*)malloc(socketCount*sizeof(icomSocket_t));
+
+    for(int i=0; i<socketCount; i++){
+        if(icom_initPubSocket(*sockets+i, comStrings[i]) != 0){
+            _E("Failed to initialize PUB socket");
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+icom_t *icom_initPublish(char *comString, unsigned payloadSize, uint32_t flags){
+    /* allocate and initialize icom structure */
+    icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
+    icom->flags  = flags;
+    icom->type   = ICOM_TYPE_PUB;
+    icom->packetIndex = 0;
+
+    /* check if zero copy is asked for */
+    if(flags & ICOM_ZERO_COPY){
+        if(flags & ICOM_PROTECTED){
+            _W("Sorry, zero copy + protected feature has not been implemented");
+            // TODO: ZERO + PROTECTED
+            //icom->cbDo     = icom_doPubZeroProtected; 
+        } else{
+            _W("Sorry, zero copy feature has not been implemented");
+            // TODO: ZERO
+            //icom->cbDo     = icom_doPubZero; 
+        }
+    } else {
+        icom->cbDo     = icom_doPubDeep; 
+    }
+
+    int ret = parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
+    if(ret != 0){
+        _E("Failed to parse communication string");
+        return NULL;
+    }
+
+    icom->packetCount = icom->socketCount;
+
+    ret = icom_initPubSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
+    if(ret != 0){
+        _E("Failed to initialize PUB sockets");
+        return NULL;
+    }
+
+    ret = icom_initPackets(icom, payloadSize);
+    if(ret != 0){
+        _E("Failed to initialize packets");
+        return NULL;
+    }
+
+    return icom;
+}
+
+
+/******************************************************************************/
+/***************************** SUBSCRIBE SOCKETS ******************************/
+/******************************************************************************/
+icomPacket_t *icom_doSubDeep(icom_t *icom){
+    /* receive all buffers from all sockets */
+    for(int i=0; i<icom->socketCount; i++){
+        icom_recvPacket(&(icom->sockets[i]), &(icom->packets[i]));
+    }
+
+    return icom->packets;
+}
+
+int icom_initSubSocket(icomSocket_t *socket, char *string){
+    socket->string = string;
+    socket->inproc = (strstr("inproc", string) != NULL)? 1 : 0;
+
+    socket->socket = zmq_socket(getContext(), ZMQ_SUB);
+    if(socket->socket == NULL){
+        _SE("Failed to create ZMQ socket");
+        return -1;
+    }
+
+    if( zmq_connect(socket->socket, socket->string) ){
+        _SE("Failed to connect ZMQ socket to \"%s\" string", socket->string);
+        return -1;
+    }
+
+    return 0;
+}
+
+int icom_initSubSockets(icomSocket_t **sockets, unsigned socketCount, char** comStrings){
+    *sockets = (icomSocket_t*)malloc(socketCount*sizeof(icomSocket_t));
+
+    for(int i=0; i<socketCount; i++){
+        if(icom_initSubSocket(*sockets+i, comStrings[i]) != 0){
+            _E("Failed to initialize PUB socket");
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+icom_t *icom_initSubscribe(char *comString, unsigned payloadSize, uint32_t flags){
+    /* allocate and initialize icom structure */
+    icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
+    icom->flags  = flags;
+    icom->type   = ICOM_TYPE_PUB;
+    icom->packetIndex = 0;
+
+    /* check if zero copy is asked for */
+    if(flags & ICOM_ZERO_COPY){
+        if(flags & ICOM_PROTECTED){
+            _W("Sorry, zero copy + protected feature has not been implemented");
+            // TODO: ZERO + PROTECTED
+            //icom->cbDo     = icom_doSubZeroProtected; 
+        } else{
+            _W("Sorry, zero copy feature has not been implemented");
+            // TODO: ZERO
+            //icom->cbDo     = icom_doSubZero; 
+        }
+    } else {
+        icom->cbDo     = icom_doSubDeep; 
+    }
+
+    int ret = parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
+    if(ret != 0){
+        _E("Failed to parse communication string");
+        return NULL;
+    }
+
+    icom->packetCount = icom->socketCount;
+
+    ret = icom_initSubSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
+    if(ret != 0){
+        _E("Failed to initialize PUB sockets");
+        return NULL;
+    }
+
+    ret = icom_initPackets(icom, payloadSize);
+    if(ret != 0){
+        _E("Failed to initialize packets");
+        return NULL;
+    }
+
+    return icom;
+}
+
+
 //static inline int icom_sendSync(void *socket){
 //    char dummy[1];
 //    return zmq_send(socket, dummy, sizeof(dummy), 0);
