@@ -8,7 +8,7 @@
 
 #define _I(fmt, args...)   printf(fmt "\n", ##args); fflush(stdout)
 #define PAYLOAD_SIZE    1024
-#define TRANSFER_COUNT  8
+#define TRANSFER_COUNT  512
 
 /* test messages */
 const char *TEST_MSG_DEFAULT   = "PUB-SUB communication";
@@ -23,6 +23,7 @@ void *thread_pub(void *arg){
     icom_t *icom = icom_initPublish((char*)arg, PAYLOAD_SIZE, 2, flags);
     int *buffer;
 
+    usleep(100); //TODO: subscriber must be initialized before publisher
     for(int i=0; i<TRANSFER_COUNT; i++){
         ICOM_GET_BUFFER(icom, buffer);
 
@@ -44,7 +45,7 @@ void *thread_sub(void *arg){
     for(int i=0; i<TRANSFER_COUNT; i++){
         ICOM_DO_AND_FOR_EACH_BUFFER(icom, buffer);
 
-        _I("Received buffer: %d (expected: %d)", *buffer, i);
+        _I("Received buffer: 0x%x (expected: 0x%x)", *buffer, i);
         TEST(testMsg, *buffer == i);
 
         ICOM_FOR_EACH_END;

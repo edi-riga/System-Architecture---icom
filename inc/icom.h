@@ -107,13 +107,14 @@ icom_t *icom_initPull(char *comString, unsigned bufferSize, uint32_t flags);
 
 
 /*@ Initialization of the icom PUBLISHER
- *
- *  @param comString   TODO
- *  @param bufferSize  TODO
- *  @param bufferCount TODO
+ * TODO
  *
  *  @return Returns icom communication descriptor */
-icom_t *icom_initPublish(char *comString, unsigned payloadSize, unsigned packetCount,uint32_t flags);
+icom_t *icom_initPublish(
+char      *comString,
+unsigned   payloadSize,
+unsigned   packetCount,
+uint32_t   flags);
 
 
 /*@ Initialization of the icom SUBSCRIBER
@@ -122,7 +123,10 @@ icom_t *icom_initPublish(char *comString, unsigned payloadSize, unsigned packetC
  *  @param bufferSize  TODO
  *
  *  @return Returns icom communication descriptor */
-icom_t *icom_initSubscribe(char *comString, unsigned payloadSize, uint32_t flags);
+icom_t *icom_initSubscribe(
+char      *comString, 
+unsigned   payloadSize, 
+uint32_t   flags);
 
 
 /*@ TODO */
