@@ -1,5 +1,5 @@
-#ifndef _ICOM_PUSH_H_
-#define _ICOM_PUSH_H_
+#ifndef _ICOM_H_
+#define _ICOM_H_
 
 #include <stdint.h>
 #include <semaphore.h>
