@@ -278,13 +278,13 @@ buffer = (typeof(buffer))_tmpPacket->payload;                                  \
 }
 
 //TODO: Macros for buffer initialization
-//#define ICOM_INIT_FOR_EACH_BUFFER(icom, buffer)                                \
-//icomPacket_t *_tmpPacket;                                                      \
-//for(int _idx=0; _idx<icom->packetCount; _idx++){                               \
+//#define ICOM_INIT_FOR_EACH_BUFFER(icom, buffer)                                
+//icomPacket_t *_tmpPacket;                                                      
+//for(int _idx=0; _idx<icom->packetCount; _idx++){                               
 //    buffer = (typeof(buffer))_tmpPacket->payload;
 //
 //
-//#define ICOM_INIT_FOR_EACH_BUFFER_END                                          \
+//#define ICOM_INIT_FOR_EACH_BUFFER_END                                          
 //}
 
 #endif
