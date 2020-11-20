@@ -33,7 +33,7 @@ printf(COLOR_RED "SYSTEM ERROR (%s): " fmt "\n" COLOR_DEFAULT, strerror(errno), 
 printf(COLOR_YELLOW "SYSTEM WARNING (%s): " fmt "\n" COLOR_DEFAULT, strerror(errno), ##args)
 
 /* DEBUGGING */
-#if DEBUG
+#ifdef DEBUG
     #define _D(fmt,args...)\
     printf(COLOR_GRAY "DEBUG:%s:%u: "fmt "\n" COLOR_DEFAULT, __func__, __LINE__, ##args); fflush(stdout)
 #else
