@@ -37,9 +37,7 @@ printf(COLOR_YELLOW "SYSTEM WARNING (%s): " fmt "\n" COLOR_DEFAULT, strerror(err
     #define _D(fmt,args...)\
     printf(COLOR_GRAY "DEBUG:%s:%u: "fmt "\n" COLOR_DEFAULT, __func__, __LINE__, ##args); fflush(stdout)
 #else
-    #define _D(fmt,args...)\
-    printf(COLOR_GRAY "DEBUG:%s:%u: "fmt "\n" COLOR_DEFAULT, __func__, __LINE__, ##args); fflush(stdout)
-    //#define _D(fmt,args...)    
+    #define _D(fmt,args...)    
 #endif
 
 
