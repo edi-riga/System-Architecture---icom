@@ -27,6 +27,7 @@ void icom_release(){
 void icom_deinit(icom_t *icom){
     /* release memory buffers, but and check  */
     if(hasAllocatedBuffers(icom)){
+        _D("Releasing allocated buffers");
         for(int i=0; i<icom->packetCount; i++){
             free(icom->packets[i].payload);
         }
@@ -41,6 +42,7 @@ void icom_deinit(icom_t *icom){
         }
     }
 
+    _D("Unbinding sockets");
     /* unbind sockets if necesarry */
     if(shouldUnbindSocket(icom)){
         for(int i=0; i<icom->socketCount; i++)
@@ -48,17 +50,28 @@ void icom_deinit(icom_t *icom){
     }
 
     /* closing all opened sockets */
+    _D("Closing sockets");
     for(int i=0; i<icom->socketCount; i++)
         zmq_close(icom->sockets[i].socket);
 
     /* release memory and socket buffers */
+    _D("Releasing packets");
     free(icom->packets);
-    free(icom->sockets);
+
+    if(!icom->isDummy){
+        _D("Releasing sockets");
+        free(icom->sockets);
+    }
 
     /* release allocated strings */
-    parser_deinitStrArray(icom->comStrings, icom->socketCount);
+    _D("Releasing string array");
+
+    if(!icom->isDummy){
+        parser_deinitStrArray(icom->comStrings, icom->socketCount);
+    }
 
     /* release holding struct */
+    _D("Releasing icom struct");
     free(icom);
 }
 
@@ -133,6 +146,13 @@ icomPacket_t *icom_getCurrentPacket(icom_t *icom){
 /******************************************************************************/
 /******************************** PUSH SOCKETS ********************************/
 /******************************************************************************/
+icomPacket_t *icom_doPushDummy(icom_t *icom){
+    // actually there is no need for multiple buffers as we are not sending them
+    // anywhere, so just return the first allocated buffer
+    _D("Dummy communicator");
+    return &(icom->packets[0]);
+}
+
 icomPacket_t *icom_doPushDeep(icom_t *icom){
     /* send packet sequence */
     for(int i=0; i<icom->socketCount; i++)
@@ -230,41 +250,71 @@ icom_t *icom_initPush(char *comString, unsigned payloadSize, unsigned packetCoun
     icom->packetIndex = 0;
     icom->flags       = flags;
     icom->type        = ICOM_TYPE_PUSH;
+    icom->isDummy     = 0;
+    int ret;
 
-    /* check if zero copy is asked for (TODO: PROTECTED) */
-    if( flags & ICOM_ZERO_COPY){
-        if( flags & ICOM_PROTECTED){
-            icom->cbDo = icom_doPushZeroProtected;
-        } else{
-            icom->cbDo = icom_doPushZero;
+    /* check if dummy communicator is requested, further initialization not possible */
+    if(comString == NULL){
+        icom->isDummy = 1;
+        icom->socketCount = 1;
+    }
+
+    if(!icom->isDummy){
+        _D("Parsing communication strings");
+        ret = parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
+        if(ret != 0){
+            _E("Failed to parse communication string");
+            return NULL;
         }
-    } else {
-        icom->cbDo = icom_doPushDeep;
     }
 
-    /* parse communication strings */
-    int ret = parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
-    if(ret != 0){
-        _E("Failed to parse communication string");
-        return NULL;
+    if(!icom->isDummy){
+        _D("Initializing push sockets");
+        ret = icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
+        if(ret != 0){
+            _E("Failed to initialize PUSH sockets");
+            return NULL;
+        }
     }
 
-    ret = icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
-    if(ret != 0){
-        _E("Failed to initialize PUSH sockets");
-        return NULL;
-    }
-
+    _D("Initializing packets");
     ret = icom_initPackets(icom, payloadSize);
     if(ret != 0){
         _E("Failed to initialize packets");
         return NULL;
     }
 
+    if(icom->isDummy){
+        _D("Selecting dummy communicator callback");
+        icom->cbDo    = icom_doPushDummy;
+        return icom;
+    }
+
+    /* check if zero copy is asked for (TODO: PROTECTED) */
+    _D("Selecting communications callback");
+    switch(flags){
+      case ICOM_DEFAULT:
+        icom->cbDo = icom_doPushDeep;
+        break;
+
+      case ICOM_ZERO_COPY:
+        icom->cbDo = icom_doPushZero;
+        break;
+
+      case ICOM_ZERO_COPY | ICOM_PROTECTED:
+        icom->cbDo = icom_doPushZeroProtected;
+        break;
+
+      default:
+        _W("Communication mode (0x%x) not supported, using dummy communication", flags);
+        icom->cbDo = icom_doPushDummy;
+    }
+
     return icom;
 }
 
 void icom_deinitPush(icom_t *icom){
+    _D("Deinitializing PUSH socket");
     /* release memory buffers */
     for(int i=0; i<icom->packetCount; i++)
         free(icom->packets[i].payload);
@@ -288,6 +338,10 @@ void icom_deinitPush(icom_t *icom){
 /******************************************************************************/
 /******************************** PULL SOCKETS ********************************/
 /******************************************************************************/
+icomPacket_t *icom_doPullDummy(icom_t *icom){
+    return NULL;
+}
+
 icomPacket_t *icom_doPullDeep(icom_t *icom){
     /* receive all buffers from all sockets */
     for(int i=0; i<icom->socketCount; i++){

@@ -62,6 +62,7 @@ typedef struct icom_t{
     icomPacketType_t  type;        //@ type of the communication
     char            **comStrings;  //@ input communication string (might be used for debugging)
     uint32_t          flags;       //@ flags associated with the communication
+    unsigned          isDummy;     //@ internal flag indicating dummy communicator
 
     /* communication socket */
     icomSocket_t     *sockets;     //@ an array of communication sockets
