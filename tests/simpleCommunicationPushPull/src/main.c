@@ -57,7 +57,7 @@ void *thread_pull(void *arg){
 int main(void){
     pthread_t pidTx, pidRx;
     icom_t *icomPush, *icomPull;
-    unsigned timeDeep, timeZero, timeZeroProtected;
+    unsigned timeDeep, timeZero, timeZeroProtected, timeDummy;
 
     testUtilsStart();
 
@@ -92,7 +92,7 @@ int main(void){
 
     _I("Initializing pthreads (zero data protected copy experiment)");
     testMsg = TEST_MSG_PROTECTED;
-    flags   = ICOM_PROTECTED;
+    flags   = ICOM_ZERO_COPY | ICOM_PROTECTED;
     timer_us_start();
     pthread_create(&pidTx, NULL, thread_push, "inproc://tmp2");
     pthread_create(&pidRx, NULL, thread_pull, "inproc://tmp2");
@@ -102,9 +102,23 @@ int main(void){
     pthread_join(pidRx, NULL);
     timeZeroProtected = timer_us_stop();
 
+
+    _I("Initializing pthread (dummy push communicator experiment)");
+    testMsg = TEST_MSG_PROTECTED;
+    flags   = ICOM_DEFAULT;
+    timer_us_start();
+    pthread_create(&pidTx, NULL, thread_push, NULL);
+
+    _I("Waiting for threads to finish");
+    pthread_join(pidTx, NULL); // push thread must return 
+    timeDummy = timer_us_stop();
+    TEST("DUMMY COMMUNICATOR (No transfer)", 1);
+
+
     _I("TIME (with deep copy):           %u us", timeDeep);
     _I("TIME (with zero copy):           %u us", timeZero);
     _I("TIME (with zero copy, prtected): %u us", timeZeroProtected);
+    _I("TIME (with zero copy, prtected): %u us", timeDummy);
 
     _I("Deinitializing icom API");
     icom_release();
