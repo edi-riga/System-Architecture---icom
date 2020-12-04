@@ -21,6 +21,8 @@ DIR:=$(sort $(dir $(OBJ))) $(sort $(dir $(OUT)))
 INC:=-Iinc -Ilib
 LIB:=-lzmq
 
+DEFINES?=
+
 all:$(DIR) $(OUT) done
 
 done:
@@ -41,13 +43,13 @@ out/libicom.so:$(OBJ)
 	$(CROSS_COMPILE)$(CC) -o $@ $(OBJ) -shared $(LIB)
 
 obj/%.o: src/%.c
-	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(INC) -c -o $@ $<
+	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
 
 obj/%.o: src/%.cpp
-	$(CROSS_COMPILE)$(CPP) $(CFLAGS) $(INC) -c -o $@ $<
+	$(CROSS_COMPILE)$(CPP) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
 
 obj/ini/%.o: lib/ini/%.c
-	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(INC) -c -o $@ $<
+	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
 
 clean:
 	rm -fr $(DIR)
