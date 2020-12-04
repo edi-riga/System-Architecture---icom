@@ -1,7 +1,8 @@
 DIRS:=$(shell ls -d */)
 DIRS:=$(subst testUtils/,,$(DIRS))
 TESTS:=$(subst /,/out/main.elf,$(DIRS))
-DIRS_CLEAN:=$(DIRS)
+DIRS_CLEAN:=$(subst /,,$(DIRS))
+DIRS_CLEAN:=$(addsuffix clean,$(DIRS_CLEAN))
 
 .PHONY: $(DIRS)
 
@@ -18,7 +19,8 @@ $(TESTS): $(DIRS)
 $(DIRS):
 	+$(MAKE) -C $@
 
-# TODO: clean
 # clean tests
-# clean:
-#	+$(MAKE) -C $(DIRS) clean
+clean: $(DIRS_CLEAN)
+
+%clean: % 
+	+$(MAKE) -C $< clean
