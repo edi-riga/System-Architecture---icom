@@ -19,7 +19,8 @@ OBJ:=$(subst .c,.o,$(OBJ))
 OUT:=out/libicom.a out/libicom.so
 DIR:=$(sort $(dir $(OBJ))) $(sort $(dir $(OUT)))
 INC:=-Iinc -Ilib
-LIB:=-lzmq
+LIB:=
+LIB_:=$(LIB) -lzmq
 
 DEFINES?=
 
@@ -40,7 +41,7 @@ out/libicom.a:$(OBJ)
 	$(CROSS_COMPILE)$(AR) $(AFLAGS) $@ $(OBJ)
 
 out/libicom.so:$(OBJ)
-	$(CROSS_COMPILE)$(CC) -o $@ $(OBJ) -shared $(LIB)
+	$(CROSS_COMPILE)$(CC) -o $@ $(OBJ) -shared $(LIB_)
 
 obj/%.o: src/%.c
 	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
