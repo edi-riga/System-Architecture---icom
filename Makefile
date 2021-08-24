@@ -22,6 +22,8 @@ INC:=-Iinc -Ilib
 LIB:=
 LIB_:=$(LIB) -lzmq
 
+.PHONY: tests
+
 DEFINES?=
 
 all:$(DIR) $(OUT) done
@@ -31,7 +33,7 @@ done:
 	@echo "Librares: $(OUT)"
 	@echo "Tests:    tests"
 
-compile_tests:
+tests:
 	@make -C tests
 
 $(DIR):

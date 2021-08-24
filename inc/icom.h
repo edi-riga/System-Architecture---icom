@@ -20,7 +20,7 @@ typedef uint32_t icomFlags_t;
 typedef struct {
   icomType_t    type;
   icomFlags_t   flags;
-  char         *comStrings;
+  char        **comStrings;
   unsigned      comCount;
 } icom_t;
 
