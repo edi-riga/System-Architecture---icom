@@ -1,19 +1,19 @@
 #ifndef _STRING_PARSER_H_
 #define _STRING_PARSER_H_
 
-
-/*@ Takes an ZMQ communication string as input with the possibility of 
- *  specifying ranges, thus the necessity for multiple sockets and initializea
- *  a C string array (must be deinitialized)
+/*@ Takes a communication string as input with the possibility of specifying
+ *  multiple ranges. This string is split into multiple separate strings and
+ *  saved into strArray pointer array. If supplied ptrStart is NULL, the 
+ *  function still sets strCount to 0, but the function will fail with -1.
  *
- *  @param strArray Address where to save pointer to the initialized 
+ *  @param strArray pointer to array of pointers where to save generated
  *         communication C-string array
  *  @param strCount Address to the unsigned variable where to save the number
  *         of found communication strings
  *  @param ptrStart The input C-string, which shall be parsed
  *
  *  @return Returns '0' on success, '-1' otherwise */
-int  parser_initStrArray(char*** strArray, unsigned* strCount, char* ptrStart);
+int  parser_initStrArray(char*** strArray, unsigned* strCount, const char* ptrStart);
 
 
 /*@ Deallocates all memory allocated previously with parser_initStrArray 
