@@ -1,5 +1,5 @@
-#ifndef _NOTIFYING_H_
-#define _NOTIFYING_H_
+#ifndef _NOTIFICATION_H_
+#define _NOTIFICATION_H_
 
 #include <stdio.h>
 #include <string.h>
