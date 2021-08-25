@@ -48,6 +48,7 @@ typedef enum {
   ICOM_IFLAGS,       /** Invalid flags */
   ICOM_NIMPL,        /** Not implemented */
   ICOM_ERROR,        /** General error */
+  ICOM_ELINK,        /** Failed to initialize link */
 
   /* Number of valid codes, required for PTR_ERR and IS_ERR */
   ICOM_COUNT

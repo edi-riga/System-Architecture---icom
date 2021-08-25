@@ -11,8 +11,10 @@ typedef uint32_t icomFlags_t;
 
 
 typedef struct {
-  const char *comString;
-  void       *pdata;
+  const char  *comString;
+  void        *pdata;
+  icomType_t   type;
+  icomFlags_t  flags;
 } icomLink_t;
 
 typedef struct {
