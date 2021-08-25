@@ -8,7 +8,7 @@ LFLAGS?=
 OUT:=out/main.elf
 INC:=-Iinc
 INC+=-I../inc
-LIB:=-lgtest
+LIB:=-lgtest -lpthread
 LIB+=-L../out -l:libicom.a
 
 SRC:=$(shell find src -name "*.c" -o -name "*.cpp")
@@ -17,7 +17,7 @@ DEP:=$(OBJ:obj/%.o=dep/%.d)
 
 DIR:=$(sort $(dir $(OBJ) $(DEP) $(OUT)))
 
-all: $(DIR) $(OUT) libs
+all: libs $(DIR) $(OUT) 
 
 $(DIR):
 	mkdir -p $@
