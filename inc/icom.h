@@ -3,25 +3,24 @@
 
 #include <stdint.h>
 
-typedef enum {
-  ICOM_TYPE_PUSH=0,
-  ICOM_TYPE_PULL,
-  ICOM_TYPE_REQ,
-  ICOM_TYPE_REP,
-} icomType_t;
+#include "icom_type.h"
+#include "icom_status.h"
 
-typedef enum {
-  ICOM_SUCCESS=0,
-  ICOM_ERROR,
-} icomStatus_t;
 
 typedef uint32_t icomFlags_t;
+
+
+typedef struct {
+  const char *comString;
+  void       *pdata;
+} icomLink_t;
 
 typedef struct {
   icomType_t    type;
   icomFlags_t   flags;
-  char        **comStrings;
   unsigned      comCount;
+  icomLink_t  **comConnections;
+  char        **comStrings;
 } icom_t;
 
 
