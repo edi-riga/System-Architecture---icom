@@ -23,13 +23,13 @@ icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomF
   /* check if IP portion of the comunication string is correct */
   p = comString;
   while( ((p-comString) < sizeof(ip)) && (*p++ != ':') );
-  if((p-comString) < sizeof(ip)){
+  if((p-comString) >= sizeof(ip)){
     _E("Failed to parse communication string");
     return (icomLink_t*)ICOM_EINVAL;
   }
 
   /* retreive communication information */
-  int r = sscanf(comString, "%s:%hu", ip, &port);
+  int r = sscanf(comString, "%[^:]:%hu", ip, &port);
   if(r != 2){
     _E("Failed to parse communication string");
     return (icomLink_t*)ICOM_EINVAL;
@@ -70,7 +70,7 @@ icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomF
 
   if(connect(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1){
     _SE("Failed to connect socket");
-    ret = (icomLink_t*)(long long)errno;
+    ret = (icomLink_t*)(long long)ICOM_ELINK;
     goto failure_connect;
   }
 
@@ -104,13 +104,13 @@ icomLink_t* icom_initSocketBind(const char *comString, icomType_t type, icomFlag
   /* check if IP portion of the comunication string is correct */
   p = comString;
   while( ((p-comString) < sizeof(ip)) && (*p++ != ':') );
-  if((p-comString) < sizeof(ip)){
+  if((p-comString) >= sizeof(ip)){
     _E("Failed to parse communication string");
     return (icomLink_t*)ICOM_EINVAL;
   }
 
   /* retreive communication information */
-  int r = sscanf(comString, "%s:%hu", ip, &port);
+  int r = sscanf(comString, "%[^:]:%hu", ip, &port);
   if(r != 2){
     _E("Failed to parse communication string");
     return (icomLink_t*)ICOM_EINVAL;
@@ -143,7 +143,9 @@ icomLink_t* icom_initSocketBind(const char *comString, icomType_t type, icomFlag
   memset(&pdata->sockaddr, 0, sizeof(struct sockaddr_in));
   pdata->sockaddr.sin_family = AF_INET;
   pdata->sockaddr.sin_port   = htons(port);
-  if(inet_aton(ip, &pdata->sockaddr.sin_addr) == 0){
+  if(strcmp(ip, "*") == 0){
+    pdata->sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  } else if(inet_aton(ip, &pdata->sockaddr.sin_addr) == 0){
     _E("Failed to convert IP address");
     ret = (icomLink_t*)ICOM_EINVAL;
     goto failure_inet_aton;

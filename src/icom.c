@@ -88,8 +88,8 @@ void icom_deinitGeneric(icomLink_t* connection){
 
 icom_t* icom_init(const char *comString, icomType_t type, icomFlags_t flags){
   int i;
-  int ret;
-  icom_t *icom;
+  int r;
+  icom_t *icom, *ret;
 
   /* allocate and initialize icom structure */
   icom = (icom_t*)malloc(sizeof(icom_t));
@@ -99,10 +99,10 @@ icom_t* icom_init(const char *comString, icomType_t type, icomFlags_t flags){
   }
 
   /* parse communication strings */
-  ret = parser_initStrArray(&icom->comStrings, &icom->comCount, comString);
-  if(ret != 0){
+  r = parser_initStrArray(&icom->comStrings, &icom->comCount, comString);
+  if(r != 0){
     _E("Failed to parse communication string");
-    icom = (icom_t*)ICOM_EINVAL;
+    ret = (icom_t*)ICOM_EINVAL;
     goto failure_initStrArray;
   }
 
@@ -110,7 +110,7 @@ icom_t* icom_init(const char *comString, icomType_t type, icomFlags_t flags){
   icom->comConnections = (icomLink_t**)malloc(icom->comCount*sizeof(icomLink_t*));
   if(!icom->comConnections){
     _E("Failed to allocate memory");
-    icom = (icom_t*)ICOM_ENOMEM;
+    ret = (icom_t*)ICOM_ENOMEM;
     goto failure_malloc_connections;
   }
 
@@ -119,7 +119,7 @@ icom_t* icom_init(const char *comString, icomType_t type, icomFlags_t flags){
     icom->comConnections[i] = icom_initGeneric(icom->comStrings[i], type, flags);
     if( ICOM_IS_ERR(icom->comConnections[i]) ){
       _E("Failed to initialize connection: %s", icom->comStrings[i]);
-      icom = (icom_t*)icom->comConnections[i];
+      ret = (icom_t*)icom->comConnections[i];
       goto failure_initGeneric;
     }
   }
@@ -135,7 +135,7 @@ failure_malloc_connections:
   parser_deinitStrArray(icom->comStrings, icom->comCount);
 failure_initStrArray:
   free(icom);
-  return icom;
+  return ret;
 }
 
 
