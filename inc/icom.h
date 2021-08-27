@@ -5,6 +5,7 @@
 
 #include "icom_type.h"
 #include "icom_status.h"
+#include "icom_config.h"
 
 
 typedef uint32_t icomFlags_t;

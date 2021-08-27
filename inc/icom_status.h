@@ -1,7 +1,6 @@
 #ifndef _ICOM_STATUS_H_
 #define _ICOM_STATUS_H_
 
-#include "icom.h"
 #include "icom_type.h"
 
 typedef enum {
