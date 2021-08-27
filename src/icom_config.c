@@ -4,51 +4,42 @@
 
 
 /* list of default values available for configuration */
-static uint64_t timeout_snd_usec = 1000000; // 1 second
 static uint64_t timeout_rcv_usec = 1000000; // 1 second
+static uint64_t timeout_snd_usec = 1000000; // 1 second
 
 
 /* configuration setter procedures */
-static icomStatus_t timeout_rcv_usec_set(icomConfig_t configId, void *configVal){
-  timeout_rcv_usec = *(uint64_t*)configVal;
-  return ICOM_SUCCESS;
-}
-
-static icomStatus_t timeout_snd_usec_set(icomConfig_t configId, void *configVal){
-  timeout_snd_usec = *(uint64_t*)configVal;
+static icomStatus_t set_uint64_t(icomConfig_t configId, void *configVal, void *inputVal){
+  *(uint64_t*)configVal = *(uint64_t*)inputVal;
   return ICOM_SUCCESS;
 }
 
 
 /* configuration getter procedures */
-static icomStatus_t timeout_rcv_usec_get(icomConfig_t configId, void *configVal){
-  *(uint64_t*)configVal = timeout_rcv_usec;
-  return ICOM_SUCCESS;
-}
-
-static icomStatus_t timeout_snd_usec_get(icomConfig_t configId, void *configVal){
-  *(uint64_t*)configVal = timeout_snd_usec;
+static icomStatus_t get_uint64_t(icomConfig_t configId, void *configVal, void *outputVal){
+  *(uint64_t*)outputVal = *(uint64_t*)configVal;
   return ICOM_SUCCESS;
 }
 
 
-/* configuration setter handlers */
-icomStatus_t (*config_setters[])(icomConfig_t configId, void *configVal) = {
-  timeout_rcv_usec_set,
-  timeout_snd_usec_set,
+/* static object for managing configuration setters and getters */
+struct config_t {
+  void *address;
+  icomStatus_t (*setter)(icomConfig_t configId, void *configVal, void *inputVal);
+  icomStatus_t (*getter)(icomConfig_t configId, void *configVal, void *inputVal);
 };
 
-/* configuration getter handlers */
-icomStatus_t (*config_getters[])(icomConfig_t configId, void *configVal) = {
-  timeout_rcv_usec_get,
-  timeout_snd_usec_get,
+static struct config_t config[] = {
+  {&timeout_rcv_usec, set_uint64_t, get_uint64_t},
+  {&timeout_snd_usec, set_uint64_t, get_uint64_t},
 };
 
 
+/* configuration interface */
 icomStatus_t icom_setDefaultConfig(icomConfig_t configId, void *configVal){
-  return config_setters[configId](configId, configVal);
+  return config[configId].setter(configId, config[configId].address, configVal);
 }
 
 icomStatus_t icom_getDefaultConfig(icomConfig_t configId, void *configVal){
-  return config_getters[configId](configId, configVal);
+  return config[configId].getter(configId, config[configId].address, configVal);
 }
