@@ -10,10 +10,10 @@
 #include "notification.h"
 #include "string_parser.h"
 
-
 #include "link_zmq.h"
 #include "link_fifo.h"
 #include "link_socket.h"
+
 
 icomLink_t* (*icomInitHandlers[])(const char*, icomType_t, icomFlags_t) = {
   icom_initSocketConnect,
@@ -40,8 +40,36 @@ void (*icomDeinitHandlers[])(icomLink_t*) = {
 };
 
 
-icomLink_t* icom_initGeneric(const char *comString, icomType_t type, icomFlags_t flags){
+#define MAX_TYPE_STRING_SIZE  64
+icomStatus_t retreiveComType(const char *comString, icomType_t *type){
+  char typeString[MAX_TYPE_STRING_SIZE];
+
+  /* retreive communication type string */
+  int r = sscanf(comString, "%3[^:]:", typeString);
+  if(r != 1){
+    _E("Failed to parse communication string");
+    return ICOM_EINVAL;
+  }
+
+  /* retreive the actual communication type */
+  *type = icom_stringToType(typeString);
+  if(*type == ICOM_TYPE_NONE){
+    return ICOM_ELOOKUP;
+  }
+
+  return ICOM_SUCCESS;
+}
+
+icomLink_t* icom_initGeneric(const char *comString, icomFlags_t flags){
   icomLink_t* connection;
+  icomType_t type;
+  icomStatus_t status;
+
+  /* retreive communication type */
+  status = retreiveComType(comString, &type);
+  if(status != ICOM_SUCCESS){
+    return (icomLink_t*)status;
+  }
 
   _D("%u (%s) type requested", type, icom_typeToString(type));
 
@@ -86,7 +114,7 @@ void icom_deinitGeneric(icomLink_t* connection){
 }
 
 
-icom_t* icom_init(const char *comString, icomType_t type, icomFlags_t flags){
+icom_t* icom_init(const char *comString, icomFlags_t flags){
   int i;
   int r;
   icom_t *icom, *ret;
@@ -116,7 +144,7 @@ icom_t* icom_init(const char *comString, icomType_t type, icomFlags_t flags){
 
   /* initialize selected icom communication */
   for(i=0; i<icom->comCount; i++){
-    icom->comConnections[i] = icom_initGeneric(icom->comStrings[i], type, flags);
+    icom->comConnections[i] = icom_initGeneric(icom->comStrings[i], flags);
     if( ICOM_IS_ERR(icom->comConnections[i]) ){
       _E("Failed to initialize connection: %s", icom->comStrings[i]);
       ret = (icom_t*)icom->comConnections[i];
@@ -129,7 +157,7 @@ icom_t* icom_init(const char *comString, icomType_t type, icomFlags_t flags){
 
 failure_initGeneric:
   for(--i; i>=0; i--){
-    icom_deinitGeneric(icom->comConnections[i]); 
+    icom_deinitGeneric(icom->comConnections[i]);
   }
 failure_malloc_connections:
   parser_deinitStrArray(icom->comStrings, icom->comCount);
@@ -144,7 +172,7 @@ void icom_deinit(icom_t* icom){
 
   /* deallocate connection objects */
   for(i=0; i<icom->comCount; i++){
-    icom_deinitGeneric(icom->comConnections[i]); 
+    icom_deinitGeneric(icom->comConnections[i]);
   }
 
   /* deallocate connection array */

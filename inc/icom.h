@@ -28,7 +28,7 @@ typedef struct {
 
 
 
-icom_t* icom_init(const char *comString, icomType_t type, icomFlags_t flags);
+icom_t* icom_init(const char *comString, icomFlags_t flags);
 void icom_deinit(icom_t* icom);
 
 icomStatus_t icom_do(icom_t *icom);
