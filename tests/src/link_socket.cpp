@@ -123,3 +123,41 @@ TEST(link_socket, send_recv_varying){
   icom_deinit(icomConnect);
   icom_deinit(icomBind);
 }
+
+
+TEST(link_socket, send_recv_100MB){
+  icom_t *icomBind, *icomConnect;
+  icomStatus_t status;
+  thread_send_t thread_pdata;
+  pthread_t pid;
+  uint32_t *rxBuf, *txBuf;
+  uint32_t rxBufSize, txBufSize = 1024*1024*sizeof(*txBuf);
+  void *pthreadRet;
+
+  icomConnect = icom_init("socket_tx:127.0.0.1:8890", 0);
+  EXPECT_FALSE(ICOM_IS_ERR(icomConnect));
+
+  icomBind = icom_init("socket_rx:*:8890", 0);
+  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
+
+  txBuf = (uint32_t*)malloc(txBufSize);
+  EXPECT_FALSE(txBuf == NULL);
+
+  for(int i=0; i<txBufSize/sizeof(*txBuf); i++){
+    txBuf[i] = i;
+  }
+
+  thread_pdata = {icomConnect, txBuf, txBufSize};
+  pthread_create(&pid, NULL, thread_send, &thread_pdata);
+
+  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
+  EXPECT_TRUE(status == ICOM_SUCCESS);
+  EXPECT_TRUE(rxBufSize == txBufSize);
+  EXPECT_TRUE(memcmp(rxBuf, txBuf, txBufSize) == 0);
+
+  pthread_join(pid, &pthreadRet);
+  EXPECT_TRUE((icomStatus_t)(unsigned long long)pthreadRet == ICOM_SUCCESS);
+
+  icom_deinit(icomConnect);
+  icom_deinit(icomBind);
+}
