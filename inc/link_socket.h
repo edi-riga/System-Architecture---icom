@@ -11,6 +11,7 @@
 
 typedef struct {
   int                fd;
+  int                fdAccepted;
   char              *ip;
   uint16_t           port;
   struct sockaddr_in sockaddr;

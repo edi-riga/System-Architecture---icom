@@ -7,6 +7,8 @@
 #include "icom_type.h"
 #include "icom_status.h"
 
+#include "config.h"
+#include "macro.h"
 #include "notification.h"
 #include "string_parser.h"
 
@@ -40,20 +42,20 @@ void (*icomDeinitHandlers[])(icomLink_t*) = {
 };
 
 
-#define MAX_TYPE_STRING_SIZE  64
 icomStatus_t retreiveComType(const char *comString, icomType_t *type){
-  char typeString[MAX_TYPE_STRING_SIZE];
+  char typeString[MAX_TYPE_STRING_LENGTH+1];
 
   /* retreive communication type string */
-  int r = sscanf(comString, "%3[^:]:", typeString);
+  int r = sscanf(comString, "%" STR(MAX_TYPE_STRING_LENGTH)  "[^:]:", typeString);
   if(r != 1){
-    _E("Failed to parse communication string");
+    _E("Failed to parse communication type string, %d", r);
     return ICOM_EINVAL;
   }
 
   /* retreive the actual communication type */
   *type = icom_stringToType(typeString);
   if(*type == ICOM_TYPE_NONE){
+    _E("Failed to lookup communication type");
     return ICOM_ELOOKUP;
   }
 
@@ -68,6 +70,7 @@ icomLink_t* icom_initGeneric(const char *comString, icomFlags_t flags){
   /* retreive communication type */
   status = retreiveComType(comString, &type);
   if(status != ICOM_SUCCESS){
+    _E("Failed to retreive communication type");
     return (icomLink_t*)status;
   }
 
@@ -183,4 +186,29 @@ void icom_deinit(icom_t* icom){
 
   /* deallocate icom structure  */
   free(icom);
+}
+
+
+icomStatus_t icom_send(icom_t *icom, void  *buf, unsigned bufSize){
+  icomStatus_t status[icom->comCount];
+
+  for(int i=0; i<icom->comCount; i++){
+    status[i] = icom->comConnections[i]->sendHandler(icom->comConnections[i], buf, bufSize);
+  }
+
+  /* TODO: analyze return values */
+
+  return status[0];
+}
+
+icomStatus_t icom_recv(icom_t *icom, void **buf, unsigned *bufSize){
+  icomStatus_t status[icom->comCount];
+
+  for(int i=0; i<icom->comCount; i++){
+    status[i] = icom->comConnections[i]->recvHandler(icom->comConnections[i], buf, bufSize);
+  }
+
+  /* TODO: analyze return values */
+
+  return status[0];
 }

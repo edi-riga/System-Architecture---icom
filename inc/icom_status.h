@@ -49,6 +49,8 @@ typedef enum {
   ICOM_ERROR,        /** General error */
   ICOM_ELINK,        /** Failed to initialize link */
   ICOM_ELOOKUP,      /** Look up error */
+  ICOM_ECONNREFUSED, /** Refused connection */
+  ICOM_PARTIAL,      /** Data sent partially */
 
   /* Number of valid codes, required for PTR_ERR and IS_ERR */
   ICOM_COUNT

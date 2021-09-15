@@ -12,5 +12,9 @@
 #define CONCATENATE1(left, right) CONCATENATE2(left, right)
 #define CONCATENATE2(left, right) left##right
 
+/* C macro to stringify */
+#define _STR(s)  #s
+#define STR(s)  _STR(s)
+
 
 #endif

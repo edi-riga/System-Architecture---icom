@@ -7,15 +7,29 @@
 #include "icom_status.h"
 #include "icom_config.h"
 
+/* forward declarations */
+typedef struct icomLink icomLink_t;
 
+/* icom flags data type */
 typedef uint32_t icomFlags_t;
 
-
+/* icom communication header */
 typedef struct {
+  icomType_t   type;    // 4 bytes
+  icomFlags_t  flags;   // 4 bytes
+  uint32_t     bufSize; // 4 bytes
+} icomMsgHeader_t;
+
+
+typedef struct icomLink {
   const char  *comString;
   void        *pdata;
   icomType_t   type;
   icomFlags_t  flags;
+  void        *recvBuf;
+  uint32_t     recvBufSize;
+  icomStatus_t (*sendHandler)(icomLink_t *link, void *buf, unsigned bufSize);
+  icomStatus_t (*recvHandler)(icomLink_t *link, void **buf, unsigned *bufSize);
 } icomLink_t;
 
 typedef struct {

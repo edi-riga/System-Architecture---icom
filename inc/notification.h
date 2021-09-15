@@ -18,7 +18,7 @@ printf(fmt "\n", ##args); fflush(stdout)
 
 /* ERROR */
 #define _E(fmt,args...)\
-printf(COLOR_RED "ERROR: " fmt "\n" COLOR_DEFAULT, ##args)
+printf(COLOR_RED "ERROR: " __FILE__ ",%d: " fmt "\n" COLOR_DEFAULT, __LINE__, ##args)
 
 /* WARNING */
 #define _W(fmt,args...)\
@@ -26,7 +26,7 @@ printf(COLOR_YELLOW "WARNING: " fmt "\n" COLOR_DEFAULT, ##args)
 
 /* SYSTEM ERROR */
 #define _SE(fmt,args...)\
-printf(COLOR_RED "SYSTEM ERROR (%s): " fmt "\n" COLOR_DEFAULT, strerror(errno), ##args)
+printf(COLOR_RED "SYSTEM ERROR (%s): " __FILE__ ",%d: " fmt "\n" COLOR_DEFAULT, strerror(errno), __LINE__, ##args)
 
 /* SYSTEM WARNING  */
 #define _SW(fmt,args...)\
