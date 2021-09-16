@@ -49,6 +49,7 @@ static icomStatus_t link_send(icomLink_t *link, void *buf, unsigned bufSize){
 
 static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   icomMsgHeader_t header;
+  int bytesReceived = 0;
   int ret;
 
   /* Retreive private data structure */
@@ -62,24 +63,29 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   }
 
   /* Reallocate input buffer */
-  if(link->recvBufSize != *bufSize){
-    link->recvBufSize = *bufSize;
+  if(link->recvBufSize != header.bufSize){
+    link->recvBufSize = header.bufSize;
     link->recvBuf     = (void*)realloc(link->recvBuf, link->recvBufSize);
   }
 
-  /* Receive the actual data */
-  ret = recv(pdata->fdAccepted, link->recvBuf, link->recvBufSize, 0);
-  if(ret == -1){
-    _SE("Send failed (header)");
-    return ICOM_ERROR;
-  }
+  /* Receive the actual data (which can be split into multiple messages) */
+  do{
+    ret = recv(pdata->fdAccepted, (uint8_t*)(link->recvBuf)+bytesReceived, link->recvBufSize-bytesReceived, 0);
+    if(ret == -1){
+      _SE("Send failed (header)");
+      return ICOM_ERROR;
+    }
+
+    bytesReceived += ret;
+  } while( (ret != -1) && (bytesReceived != header.bufSize));
 
   /* Setup output arguments */
   *buf     = link->recvBuf;
-  *bufSize = ret;
+  *bufSize = bytesReceived;
 
   /* Check if size of requested and sent data is equal */
-  if(ret != link->recvBufSize){
+  if(bytesReceived != link->recvBufSize){
+    _W("Received partial data (%d/%d)", ret, link->recvBufSize);
     return ICOM_PARTIAL;
   }
 
@@ -146,7 +152,7 @@ icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomF
   const char *p;
   char ip[sizeof("xxx.xxx.xxx.xxx")];
   char typeString[MAX_TYPE_STRING_LENGTH+1];
-  int not_connected = 1;
+  int not_connected = 0;
 
   /* check if IP portion of the comunication string is correct */
   p = comString;
@@ -200,7 +206,7 @@ icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomF
   if(connect(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1){
     if(errno == ECONNREFUSED){
       //_SW("Failed to connect socket");
-      not_connected = 0;
+      not_connected = 1;
     } else {
       _SE("Failed to connect socket");
       ret = (icomLink_t*)(long long)ICOM_ELINK;
@@ -307,11 +313,12 @@ icomLink_t* icom_initSocketBind(const char *comString, icomType_t type, icomFlag
   link->sendHandler = link_sendNotImplemented;
   link->recvHandler = link_acceptAndRecv;
 
-  pdata->ip   = strdup(ip);
-  pdata->port = port;
-  link->pdata = pdata;
-  link->flags = flags;
-  link->type  = type;
+  pdata->ip         = strdup(ip);
+  pdata->port       = port;
+  pdata->fdAccepted = 0;
+  link->pdata       = pdata;
+  link->flags       = flags;
+  link->type        = type;
   link->recvBuf     = NULL;
   link->recvBufSize = 0;
 
@@ -330,10 +337,21 @@ failure_malloc_linkSocket:
 }
 
 void icom_deinitSocket(icomLink_t* link){
-  if(link->recvBuf)
+  // retreive private data structure
+  icomLinkSocket_t *pdata = (icomLinkSocket_t*)(link->pdata);
+
+  if(pdata->fdAccepted){
+    shutdown(pdata->fdAccepted, SHUT_RDWR);
+    close(pdata->fdAccepted);
+  }
+  shutdown(pdata->fd, SHUT_RDWR);
+  close(pdata->fd);
+  free(pdata->ip);
+
+
+  if(link->recvBuf){
     free(link->recvBuf);
-  free (((icomLinkSocket_t*)(link->pdata))->ip);
-  close(((icomLinkSocket_t*)(link->pdata))->fd);
+  }
   free(link->pdata);
   free(link);
 }

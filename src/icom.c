@@ -94,26 +94,10 @@ icomLink_t* icom_initGeneric(const char *comString, icomFlags_t flags){
   }
 
   return (icomLink_t*)ICOM_ERROR;
-
-  //{ // ICOM_TYPE_NATIVE_SOCKET: "*.*.*.*:*"
-  //  uint8_t  ip4[4];
-  //  uint16_t port;
-  //  ret = sscanf(comString, "%hhu.%hhu.%hhu.%hhu:%hu", &ip4[4], &ip4[2], &ip4[1], &ip4[0], &port);
-  //  if(ret == 5){
-  //    return icom_initNativeSocket(ip4, port, flags);
-  //  }
-  //}
-
-  //{ // ICOM_TYPE_ZMQ_PUSH:  "tcp://*:*" || "inproc://*"
-  //  if( strstr(comString, "tcp:") == comString || strstr(comString, "inproc:") == comString){
-  //  }
-  //}
-
-  //{ // ICOM_TYPE_ZMQ_PULL
-  //}
 }
 
 void icom_deinitGeneric(icomLink_t* connection){
+  icomDeinitHandlers[connection->type](connection);
 }
 
 
