@@ -1,10 +1,13 @@
-CC:=gcc
-CPP:=g++
+CC?=gcc
+CPP?=g++
 CROSS_COMPILE?=
 
-CFLAGS:=-Wall -fPIC
-LFLAGS:=
+CFLAGS?=
+CFLAGS:=-Wall -fPIC $(CFLAGS)
+LFLAGS?=
+LFLAGS:=$(LFLAGS)
 AFLAGS:=rcs
+DEFINES?=
 
 SRC:=$(shell find ./src -name "*.c")
 SRC+=$(shell find ./src -name "*.cpp")
@@ -15,14 +18,12 @@ OBJ:=$(subst lib/,obj/,$(OBJ))
 OBJ:=$(subst .cpp,.o,$(OBJ))
 OBJ:=$(subst .c,.o,$(OBJ))
 
-#OUT:=out/libicom.a
 OUT:=out/libicom.a out/libicom.so
 DIR:=$(sort $(dir $(OBJ))) $(sort $(dir $(OUT)))
 INC:=-Iinc -Ilib
-LIB:=
-LIB_:=$(LIB) -lzmq
+LIB?=
+LIB:=$(LIB) -lzmq
 
-DEFINES?=
 
 all:$(DIR) $(OUT) done
 
@@ -41,7 +42,7 @@ out/libicom.a:$(OBJ)
 	$(CROSS_COMPILE)$(AR) $(AFLAGS) $@ $(OBJ)
 
 out/libicom.so:$(OBJ)
-	$(CROSS_COMPILE)$(CC) -o $@ $(OBJ) -shared $(LIB_)
+	$(CROSS_COMPILE)$(CC) -o $@ $(OBJ) -shared $(LIB)
 
 obj/%.o: src/%.c
 	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
