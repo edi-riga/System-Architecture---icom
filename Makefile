@@ -25,7 +25,7 @@ LIB?=
 LIB:=$(LIB) -lzmq
 
 
-all:$(DIR) $(OUT) done
+all: $(OUT) done
 
 done:
 	@echo
@@ -38,10 +38,10 @@ compile_tests:
 $(DIR):
 	mkdir -p $@
 
-out/libicom.a:$(OBJ)
+out/libicom.a: $(DIR) $(OBJ)
 	$(CROSS_COMPILE)$(AR) $(AFLAGS) $@ $(OBJ)
 
-out/libicom.so:$(OBJ)
+out/libicom.so: $(DIR) $(OBJ)
 	$(CROSS_COMPILE)$(CC) -o $@ $(OBJ) -shared $(LIB)
 
 obj/%.o: src/%.c
