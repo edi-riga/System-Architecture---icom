@@ -139,3 +139,73 @@ TEST(string_parser, four_strings_comma_brackets){
 
   parser_deinitStrArray(strArray, strCount);
 }
+
+
+TEST(string_parser, fieldInit0){
+  char **fieldArray; uint32_t fieldCount;
+  const char *str = NULL;
+  int ret;
+
+  ret = parser_initFields(&fieldArray, &fieldCount, str, ':');
+  EXPECT_EQ(-1, ret);
+  EXPECT_EQ( 0, fieldCount);
+  EXPECT_TRUE(NULL == fieldArray);
+}
+
+TEST(string_parser, fieldInit1){
+  char **fieldArray; uint32_t fieldCount;
+  const char *str = "field0";
+  int ret;
+
+  ret = parser_initFields(&fieldArray, &fieldCount, str, ':');
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(1, fieldCount);
+  EXPECT_STREQ("field0", fieldArray[0]);
+
+  parser_deinitFields(fieldArray, fieldCount);
+}
+
+TEST(string_parser, fieldInit2){
+  char **fieldArray; uint32_t fieldCount;
+  const char *str = "field0:field1";
+  int ret;
+
+  ret = parser_initFields(&fieldArray, &fieldCount, str, ':');
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(2, fieldCount);
+  EXPECT_STREQ("field0", fieldArray[0]);
+  EXPECT_STREQ("field1", fieldArray[1]);
+
+  parser_deinitFields(fieldArray, fieldCount);
+}
+
+TEST(string_parser, fieldInit3){
+  char **fieldArray; uint32_t fieldCount;
+  const char *str = "field0:field1:field2";
+  int ret;
+
+  ret = parser_initFields(&fieldArray, &fieldCount, str, ':');
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(3, fieldCount);
+  EXPECT_STREQ("field0", fieldArray[0]);
+  EXPECT_STREQ("field1", fieldArray[1]);
+  EXPECT_STREQ("field2", fieldArray[2]);
+
+  parser_deinitFields(fieldArray, fieldCount);
+}
+
+TEST(string_parser, fieldInit4){
+  char **fieldArray; uint32_t fieldCount;
+  const char *str = "field0:field1:field2:field3";
+  int ret;
+
+  ret = parser_initFields(&fieldArray, &fieldCount, str, ':');
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(4, fieldCount);
+  EXPECT_STREQ("field0", fieldArray[0]);
+  EXPECT_STREQ("field1", fieldArray[1]);
+  EXPECT_STREQ("field2", fieldArray[2]);
+  EXPECT_STREQ("field3", fieldArray[3]);
+
+  parser_deinitFields(fieldArray, fieldCount);
+}

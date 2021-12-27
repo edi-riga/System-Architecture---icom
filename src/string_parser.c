@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include "string_parser.h"
 #include "notification.h"
 
@@ -112,4 +113,67 @@ void parser_deinitStrArray(char **strArray, unsigned strCount){
   for(int i=0; i<strCount; i++)
     free((strArray)[i]);
   free(strArray);
+}
+
+
+int parser_initFields(char ***fieldArray, uint32_t *fieldCount, const char *ptrStart, char separator){
+  char *ptrStop;
+  int i;
+
+  /* check if no string has been passed */
+  if(ptrStart == NULL){
+    *fieldArray = NULL;
+    *fieldCount = 0;
+    return -1;
+  }
+
+  /* check if connection string format is correct */
+  ptrStop = (char*)ptrStart;
+  for(*fieldCount=1; *ptrStop; ptrStop++){
+    if(*ptrStop == separator){
+      (*fieldCount)++;
+    }
+  }
+
+  /* allocate array for field array */
+  *fieldArray = (char**)malloc((*fieldCount)*sizeof(char*));
+  if(*fieldArray == NULL){
+    _E("Failed to allocate memory");
+    return -1;
+  }
+
+  /* duplicate field string array */
+  ptrStop = (char*)ptrStart;
+  i = 0;
+  do{
+    ptrStop = strchrnul(ptrStart, separator);
+    (*fieldArray)[i] = strndup(ptrStart, ptrStop - ptrStart);
+    if(!(*fieldArray)[i]){
+      _E("Failed to allocate memory");
+      goto failure_duplicate;
+    }
+
+    i++;
+    ptrStart = ptrStop + 1;
+  } while(*ptrStop != '\0');
+
+  return 0;
+
+
+failure_duplicate:
+  for(;i>=0;i--){
+    free((*fieldArray)[i]);
+  }
+
+  free(*fieldArray);
+  return -1;
+}
+
+
+void parser_deinitFields(char **fieldArray, uint32_t fieldCount){
+  for(int i=0; i<fieldCount; i++){
+    free(fieldArray[i]);
+  }
+
+  free(fieldArray);
 }
