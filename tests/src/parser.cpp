@@ -140,6 +140,23 @@ TEST(string_parser, four_strings_comma_brackets){
   parser_deinitStrArray(strArray, strCount);
 }
 
+TEST(string_parser, five_strings_comma_brackets){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0-1],inproc2,inproc[3-4]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_TRUE(0 == ret);
+  EXPECT_TRUE(5 == strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
 
 TEST(string_parser, fieldInit0){
   char **fieldArray; uint32_t fieldCount;
