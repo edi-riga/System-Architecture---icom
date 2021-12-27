@@ -5,10 +5,10 @@
 #include "notification.h"
 
 
-icomLink_t* icom_initFifo(const char *comString, icomType_t type, icomFlags_t flags){
-  return (icomLink_t*)ICOM_NIMPL;
+icomStatus_t icom_initFifo(icomLink_t *link, icomType_t type, const char *comString, icomFlags_t flags){
+  return ICOM_NIMPL;
 }
 
 
-void icom_deinitFifo(icomLink_t* connection){
+void icom_deinitFifo(icomLink_t* link){
 }

@@ -9,8 +9,8 @@ typedef struct {
   int  fd;
 } icomLinkFifo_t;
 
-icomLink_t* icom_initFifo(const char *comString, icomType_t type, icomFlags_t flags);
-void icom_deinitFifo(icomLink_t* connection);
+icomStatus_t icom_initFifo(icomLink_t *link, icomType_t type, const char *comString, icomFlags_t flags);
+void icom_deinitFifo(icomLink_t* link);
 
 #endif
 
