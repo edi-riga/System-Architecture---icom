@@ -18,10 +18,8 @@ typedef struct {
 } icomLinkSocket_t;
 
 
-icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomFlags_t flags);
-
-icomLink_t* icom_initSocketBind(const char *comString, icomType_t type, icomFlags_t flags);
-
+icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const char *comString, icomFlags_t flags);
+icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *comString, icomFlags_t flags);
 void icom_deinitSocket(icomLink_t* connection);
 
 #endif

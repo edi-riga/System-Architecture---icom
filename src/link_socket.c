@@ -52,6 +52,8 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   int bytesReceived = 0;
   int ret;
 
+  _D("Receiving at link: %p", link);
+
   /* Retreive private data structure */
   icomLinkSocket_t *pdata = link->pdata;
 
@@ -65,7 +67,8 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   /* Reallocate input buffer */
   if(link->recvBufSize != header.bufSize){
     link->recvBufSize = header.bufSize;
-    link->recvBuf     = (void*)realloc(link->recvBuf, link->recvBufSize);
+    link->recvBuf     = (void*)realloc(link->recvBuf-sizeof(link), sizeof(link) + link->recvBufSize);
+    link->recvBuf    += sizeof(link);
   }
 
   /* Receive the actual data (which can be split into multiple messages) */
@@ -89,6 +92,8 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
     return ICOM_PARTIAL;
   }
 
+  _D("Link at %p received %u bytes", link, *bufSize);
+
   return ICOM_SUCCESS;
 }
 
@@ -97,6 +102,8 @@ static icomStatus_t link_connectAndSend(icomLink_t *link, void *buf, unsigned bu
 
   /* Retreive private data structure */
   icomLinkSocket_t *pdata = link->pdata;
+
+  _D();
 
   /* Connect to the */
   if(connect(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1){
@@ -119,6 +126,8 @@ static icomStatus_t link_acceptAndRecv(icomLink_t *link, void **buf, unsigned *b
 
   /* Retreive private data structure */
   icomLinkSocket_t *pdata = link->pdata;
+
+  _D();
 
   /* Connect to the */
   pdata->fdAccepted = accept(pdata->fd, NULL, NULL);
@@ -144,14 +153,12 @@ static icomStatus_t link_recvNotImplemented(icomLink_t *link, void **buf, unsign
 }
 
 
-icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomFlags_t flags){
-  icomLink_t *link;
-  icomLink_t *ret;
+icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const char *comString, icomFlags_t flags){
+  icomStatus_t ret;
   icomLinkSocket_t *pdata;
   uint16_t port;
   const char *p;
   char ip[sizeof("xxx.xxx.xxx.xxx")];
-  char typeString[MAX_TYPE_STRING_LENGTH+1];
   int not_connected = 0;
 
   /* check if IP portion of the comunication string is correct */
@@ -159,36 +166,28 @@ icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomF
   while( ((p-comString) < sizeof(ip)) && (*p++ != ':') );
   if((p-comString) >= sizeof(ip)){
     _E("Failed to parse communication string");
-    return (icomLink_t*)ICOM_EINVAL;
+    return ICOM_EINVAL;
   }
 
   /* retreive communication information */
-  int r = sscanf(comString, "%" STR(MAX_TYPE_STRING_LENGTH) "[^:]:%15[^:]:%hu", typeString, ip, &port);
-  if(r != 3){
-    _E("Failed to parse communication string");
-    return (icomLink_t*)ICOM_EINVAL;
-  }
-
-  /* allocating memory for the link data structure */
-  link = (icomLink_t*)malloc(sizeof(icomLink_t));
-  if(!link){
-    _E("Failed to allocate memory");
-    return (icomLink_t*)ICOM_ENOMEM;
+  int r = sscanf(comString, "%15[^:]:%hu", ip, &port);
+  if(r != 2){
+    _E("Failed to parse communication string (%d)", r);
+    return ICOM_EINVAL;
   }
 
   /* allocating memory for the private link data structure */
   pdata = (icomLinkSocket_t*)malloc(sizeof(icomLinkSocket_t));
   if(!pdata){
     _E("Failed to allocate memory");
-    ret = (icomLink_t*)ICOM_ENOMEM;
-    goto failure_malloc_linkSocket;
+    return ICOM_ENOMEM;
   }
 
   /* creating TCP socket */
   pdata->fd = socket(AF_INET, SOCK_STREAM, 0);
   if(pdata->fd == -1){
     _SE("Failed to create socket");
-    ret = (icomLink_t*)(long long)errno;
+    ret = (icomStatus_t)errno;
     goto failure_socket;
   }
 
@@ -198,18 +197,18 @@ icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomF
   pdata->sockaddr.sin_port   = htons(port);
   if(inet_aton(ip, &pdata->sockaddr.sin_addr) == 0){
     _E("Failed to convert IP address");
-    ret = (icomLink_t*)ICOM_EINVAL;
+    ret = ICOM_EINVAL;
     goto failure_inet_aton;
   }
 
   /* attempt connectn */
   if(connect(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1){
     if(errno == ECONNREFUSED){
-      //_SW("Failed to connect socket");
+      _SW("Failed to connect socket (Reveiver is not yet running)");
       not_connected = 1;
     } else {
       _SE("Failed to connect socket");
-      ret = (icomLink_t*)(long long)ICOM_ELINK;
+      ret = (icomStatus_t)ICOM_ELINK;
       goto failure_connect;
     }
   }
@@ -224,7 +223,7 @@ icomLink_t* icom_initSocketConnect(const char *comString, icomType_t type, icomF
   link->flags = flags;
   link->type  = type;
 
-  return link;
+  return ICOM_SUCCESS;
 
 
 failure_connect:
@@ -232,55 +231,43 @@ failure_inet_aton:
   close(pdata->fd);
 failure_socket:
   free(pdata);
-failure_malloc_linkSocket:
-  free(link);
   return ret;
 }
 
-icomLink_t* icom_initSocketBind(const char *comString, icomType_t type, icomFlags_t flags){
-  icomLink_t *link;
-  icomLink_t *ret;
+icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *comString, icomFlags_t flags){
+  icomStatus_t ret;
   icomLinkSocket_t *pdata;
   uint16_t port;
   const char *p;
   char ip[sizeof("xxx.xxx.xxx.xxx")];
-  char typeString[MAX_TYPE_STRING_LENGTH+1];
 
   /* check if IP portion of the comunication string is correct */
   p = comString;
   while( ((p-comString) < sizeof(ip)) && (*p++ != ':') );
   if((p-comString) >= sizeof(ip)){
     _E("Failed to parse communication string");
-    return (icomLink_t*)ICOM_EINVAL;
+    return ICOM_EINVAL;
   }
 
   /* retreive communication information */
-  int r = sscanf(comString, "%" STR(MAX_TYPE_STRING_LENGTH) "[^:]:%15[^:]:%hu", typeString, ip, &port);
-  if(r != 3){
+  int r = sscanf(comString, "%15[^:]:%hu", ip, &port);
+  if(r != 2){
     _E("Failed to parse communication string");
-    return (icomLink_t*)ICOM_EINVAL;
-  }
-
-  /* allocating memory for the link data structure */
-  link = (icomLink_t*)malloc(sizeof(icomLink_t));
-  if(!link){
-    _E("Failed to allocate memory");
-    return (icomLink_t*)ICOM_ENOMEM;
+    return ICOM_EINVAL;
   }
 
   /* allocating memory for the private link data structure */
   pdata = (icomLinkSocket_t*)malloc(sizeof(icomLinkSocket_t));
   if(!pdata){
     _E("Failed to allocate memory");
-    ret = (icomLink_t*)ICOM_ENOMEM;
-    goto failure_malloc_linkSocket;
+    return ICOM_ENOMEM;
   }
 
   /* creating TCP socket */
   pdata->fd = socket(AF_INET, SOCK_STREAM, 0);
   if(pdata->fd == -1){
     _SE("Failed to create socket");
-    ret = (icomLink_t*)(long long)errno;
+    ret = (icomStatus_t)errno;
     goto failure_socket;
   }
 
@@ -292,20 +279,20 @@ icomLink_t* icom_initSocketBind(const char *comString, icomType_t type, icomFlag
     pdata->sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
   } else if(inet_aton(ip, &pdata->sockaddr.sin_addr) == 0){
     _E("Failed to convert IP address");
-    ret = (icomLink_t*)ICOM_EINVAL;
+    ret = (icomStatus_t)ICOM_EINVAL;
     goto failure_inet_aton;
   }
 
   /* bind to the IP address */
   if(bind(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1){
     _SE("Failed to bind socket");
-    ret = (icomLink_t*)(long long)errno;
+    ret = (icomStatus_t)errno;
     goto failure_bind;
   }
 
   if(listen(pdata->fd, 1) == -1){
     _SE("Failed to mark socket passive");
-    ret = (icomLink_t*)(long long)errno;
+    ret = (icomStatus_t)errno;
     goto failure_listen;
   };
 
@@ -319,10 +306,12 @@ icomLink_t* icom_initSocketBind(const char *comString, icomType_t type, icomFlag
   link->pdata       = pdata;
   link->flags       = flags;
   link->type        = type;
-  link->recvBuf     = NULL;
   link->recvBufSize = 0;
+  link->recvBuf     = (void*)malloc(sizeof(link));
+  *(icomLink_t**)link->recvBuf = link;
+  link->recvBuf     += sizeof(link);
 
-  return link;
+  return ICOM_SUCCESS;
 
 
 failure_listen:
@@ -331,13 +320,11 @@ failure_inet_aton:
   close(pdata->fd);
 failure_socket:
   free(pdata);
-failure_malloc_linkSocket:
-  free(link);
   return ret;
 }
 
 void icom_deinitSocket(icomLink_t* link){
-  // retreive private data structure
+  /* retreive private data structure */
   icomLinkSocket_t *pdata = (icomLinkSocket_t*)(link->pdata);
 
   if(pdata->fdAccepted){
@@ -348,10 +335,9 @@ void icom_deinitSocket(icomLink_t* link){
   close(pdata->fd);
   free(pdata->ip);
 
-
-  if(link->recvBuf){
-    free(link->recvBuf);
+  if(link->type == ICOM_TYPE_SOCKET_RX && link->recvBuf){
+    free(link->recvBuf-sizeof(link));
   }
+
   free(link->pdata);
-  free(link);
 }
