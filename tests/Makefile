@@ -1,6 +1,7 @@
 CC:=gcc
 CXX:=g++
 CROSS_COMPILE?=
+DEFINES?=
 
 CFLAGS?=
 LFLAGS?=
@@ -22,7 +23,7 @@ all: libs $(DIR) $(OUT)
 $(DIR):
 	mkdir -p $@
 
-$(OUT): $(OBJ) ../out/libicom.a
+$(OUT): ../out/libicom.a $(OBJ)
 	$(CROSS_COMPILE)$(CXX) $(LFLAGS) $(OBJ) -o $(OUT) $(LIB)
 
 obj/%.c.o: src/%.c
@@ -32,7 +33,7 @@ obj/%.cpp.o: src/%.cpp
 	$(CROSS_COMPILE)$(CXX) $(CFLAGS) $(INC) -MMD -MP -MF $(patsubst obj/%.o,dep/%.d,$@) -c -o $@ $<
 
 libs:
-	make -C ../
+	make DEFINES=$(DEFINES) -C ../
 
 clean:
 	rm -fr $(DIR) tags
