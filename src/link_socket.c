@@ -204,7 +204,7 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
   /* attempt connectn */
   if(connect(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1){
     if(errno == ECONNREFUSED){
-      _SW("Failed to connect socket (Reveiver is not yet running)");
+      //_SW("Failed to connect socket (Receiver is not yet running)");
       not_connected = 1;
     } else {
       _SE("Failed to connect socket");
@@ -240,6 +240,7 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
   uint16_t port;
   const char *p;
   char ip[sizeof("xxx.xxx.xxx.xxx")];
+  int tmp;
 
   /* check if IP portion of the comunication string is correct */
   p = comString;
@@ -269,6 +270,15 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
     _SE("Failed to create socket");
     ret = (icomStatus_t)errno;
     goto failure_socket;
+  }
+
+  /* turn on socket reuse to avoid kernel holding the socket after shutdown/close */
+  tmp = 1;
+  ret = setsockopt(pdata->fd,SOL_SOCKET,SO_REUSEADDR,&tmp,sizeof(int));
+  if(ret == -1){
+    _SE("Failed to set socket option");
+    ret = (icomStatus_t)errno;
+    goto failure_setsockopt;
   }
 
   /* set sender socket */
@@ -317,6 +327,7 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
 failure_listen:
 failure_bind:
 failure_inet_aton:
+failure_setsockopt:
   close(pdata->fd);
 failure_socket:
   free(pdata);
@@ -327,7 +338,7 @@ void icom_deinitSocket(icomLink_t* link){
   /* retreive private data structure */
   icomLinkSocket_t *pdata = (icomLinkSocket_t*)(link->pdata);
 
-  if(pdata->fdAccepted){
+  if(link->type == ICOM_TYPE_SOCKET_RX && pdata->fdAccepted){
     shutdown(pdata->fdAccepted, SHUT_RDWR);
     close(pdata->fdAccepted);
   }
