@@ -2,7 +2,7 @@ CC:=gcc
 CPP:=g++
 CROSS_COMPILE?=
 
-CFLAGS:=-Wall -fPIC
+CFLAGS:=-Wall -fPIC -g -O2
 LFLAGS:=
 AFLAGS:=rcs
 
