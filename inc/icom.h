@@ -34,13 +34,16 @@ typedef struct {
 
 /** @brief Generic encapsulation object for any communication link */
 typedef struct icomLink {
-  const char  *comString; /** communication string */
-  void        *pdata;     /** private communication link's data */
-  icomType_t   type;      /** communication type */
-  icomFlags_t  flags;     /** communication flags */
+  const char  *comString;   /** communication string */
+  void        *pdata;       /** private communication link's data */
+  icomType_t   type;        /** communication type */
+  icomFlags_t  flags;       /** communication flags */
   void        *recvBuf;     /** points to received data buffer (recvBuf-sizeof(pointer)
                                 holds pointer to the respective link structure) */
-  uint32_t     recvBufSize; /** received data buffer size */
+  uint32_t     recvSize;    /** number of bytes required to receive data from the
+                                sender, may correspond to pointer size when zero-copying */
+  uint32_t     recvBufSize; /** number of bytes in the received buffer,
+                                corresponds to the actual sender buffer size */
   icomStatus_t (*sendHandler)(icomLink_t *link, void *buf, unsigned bufSize);
   icomStatus_t (*sendHandlerSecondary)(icomLink_t *link, void *buf, unsigned bufSize);
   icomStatus_t (*recvHandler)(icomLink_t *link, void **buf, unsigned *bufSize);
@@ -86,6 +89,8 @@ icomStatus_t icom_setBuffer2(icom_t *icom, void *buf);
 icomStatus_t icom_setBuffer3(icom_t *icom, void *buf, unsigned bufSize);
 icomStatus_t icom_getBuffer2(icom_t *icom, void **buf);
 icomStatus_t icom_getBuffer3(icom_t *icom, void **buf, unsigned *bufSize);
+
+// TODO: API to receive buffer count
 
 #define icom_setBuffer(...) \
   CONCATENATE(icom_setBuffer,ARGUMENT_COUNT(__VA_ARGS__)(__VA_ARGS__))

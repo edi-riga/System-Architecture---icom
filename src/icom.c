@@ -221,11 +221,12 @@ icomStatus_t icom_send(icom_t *icom, void  *buf, unsigned bufSize){
 
 icomStatus_t icom_recv1(icom_t *icom){ //, void **buf, unsigned *bufSize){
   icomStatus_t status[icom->comCount];
+  void *dummyBuf;
 
   for(int i=0; i<icom->comCount; i++){
     status[i] = icom->comConnections[i].recvHandler(
       icom->comConnections+i,
-      &(icom->comConnections[i].recvBuf),
+      &dummyBuf,
       &(icom->comConnections[i].recvBufSize));
   }
 
@@ -238,8 +239,10 @@ icomStatus_t icom_recv1(icom_t *icom){ //, void **buf, unsigned *bufSize){
 icomStatus_t icom_recv3(icom_t *icom, void **buf, unsigned *bufSize){
   icomStatus_t status[icom->comCount];
 
-  /* TODO: reverse order */
-  for(int i=0; i<icom->comCount; i++){
+  /* Perform all the data receptions in reverse order. The order is reveresed
+   * so that the first buffer in the recvBuf list is returned and, therefore,
+   * the icom_nextBuffer routine indeed would return the next buffer. */
+  for(int i=icom->comCount-1; i>=0; i--){
     status[i] = icom->comConnections[i].recvHandler(icom->comConnections+i, buf, bufSize);
   }
 
@@ -253,16 +256,47 @@ void* icom_nextBuffer(icom_t *icom, void **buf, unsigned *bufSize){
   icomLink_t *link;
   int bufIndex;
 
-  /* NULL signals request for the first buffer */
+  /* NULL signals a request for the first buffer, there is an ugly workaround
+   * for zero copy, i.e. if that's the case, we return pointer at the location
+   * of the buffer */
   if(*buf == NULL){
     *bufSize = icom->comConnections[0].recvBufSize;
-    *buf     = icom->comConnections[0].recvBuf;
+    *buf     = (icom->comConnections[0].flags & ICOM_FLAG_ZERO)
+      ? *(void**)icom->comConnections[0].recvBuf
+      :          icom->comConnections[0].recvBuf;
     return *buf;
   }
 
-  /* Non-NULL buffer value assumes request for the next buffer */
-  link = (*buf-sizeof(link));
-  bufIndex = (link - icom->comConnections)/sizeof(link);
+  /* Get ready for some sad (and probably dumb) pointer magic, but at the moment
+   * I could not think of anything better :( Imporantly, for zero-copy use case,
+   * we cannot determine the buffer's link. Firstly, note that normal buffers
+   * have reference to their respective link just before the buffer address,
+   * which is not the case for zero-copy buffers. So, firstly we try to identify
+   * if the requested buffer's potential/theoretical link address indeed hits
+   * the link array address region, if that is not the case, we assume that we
+   * have been supplied with a zero-copy buffer. Further, we in a brute force
+   * manner find the corresponding bufferIndex and return "next" buffer, hence
+   * the (index+1) */
+  if( (*(void**)(*buf-sizeof(icomLink_t*)) < (void*)(icom->comConnections))
+  ||  (*(void**)(*buf-sizeof(icomLink_t*)) > (void*)(icom->comConnections + icom->comCount))){
+    for(int bufIndex=0; bufIndex<icom->comCount-1; bufIndex++){
+      if(*buf == *(void**)icom->comConnections[bufIndex].recvBuf){
+        *bufSize = icom->comConnections[bufIndex+1].recvBufSize;
+        *buf     = *(void**)icom->comConnections[bufIndex+1].recvBuf;
+        return *buf;
+      }
+    }
+
+    return NULL;
+  }
+
+  /* Non-NULL buffer value assumes request for the next buffer (1) get address
+   * for the current buffer's link; (2) get the index of the link in the
+   * connection list and increment it (try to get the "next" buffer) */
+  link = *(icomLink_t**)(*buf-sizeof(link));
+  bufIndex = (link-icom->comConnections) + 1;
+
+  /* return "next" buffer if the index is valid */
   if(bufIndex < icom->comCount){
     *bufSize = icom->comConnections[bufIndex].recvBufSize;
     *buf     = icom->comConnections[bufIndex].recvBuf;

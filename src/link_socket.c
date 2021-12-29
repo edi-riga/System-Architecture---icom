@@ -98,33 +98,34 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
 
   /* Reallocate input buffer */
   if(link->recvBufSize != header.bufSize){
-    link->recvBufSize = (header.flags & ICOM_FLAG_ZERO) ? sizeof(void*) : header.bufSize;
+    link->recvBufSize = header.bufSize;
+    link->recvSize    = (header.flags & ICOM_FLAG_ZERO) ? sizeof(void*) : header.bufSize;
     link->recvBuf     = (void*)realloc(link->recvBuf-sizeof(link), sizeof(link) + link->recvBufSize);
-    link->recvBuf    += sizeof(link);
+    link->recvBuf     += sizeof(link);
   }
 
   /* Receive the actual data (which can be split into multiple messages) */
   do{
-    ret = recv(pdata->fdAccepted, (uint8_t*)(link->recvBuf)+bytesReceived, link->recvBufSize-bytesReceived, 0);
+    ret = recv(pdata->fdAccepted, (uint8_t*)(link->recvBuf)+bytesReceived, link->recvSize-bytesReceived, 0);
     if(ret == -1){
-      _SE("Send failed (header)");
+      _SE("Receive failed (header)");
       return ICOM_ERROR;
     }
 
     bytesReceived += ret;
-  } while( (ret != -1) && (bytesReceived != link->recvBufSize));
+  } while( (ret != -1) && (bytesReceived != link->recvSize));
 
   /* Setup output arguments */
   *buf     = (header.flags & ICOM_FLAG_ZERO) ? *(void**)link->recvBuf : link->recvBuf;
   *bufSize = (header.flags & ICOM_FLAG_ZERO) ? header.bufSize         : bytesReceived;
 
   /* Check if size of requested and sent data is equal */
-  if(bytesReceived != link->recvBufSize){
-    _W("Received partial data (%d/%d)", ret, link->recvBufSize);
+  if( !(header.flags & ICOM_FLAG_ZERO) && bytesReceived != link->recvBufSize){
+    _W("Received partial data (%d bytes / %d bytes)", bytesReceived, link->recvBufSize);
     return ICOM_PARTIAL;
   }
 
-  _D("Link at %p received %u bytes", link, *bufSize);
+  _D("Link @%p in buffer @%p  received %u bytes", link, link->recvBuf, *bufSize);
 
   return ICOM_SUCCESS;
 }
@@ -349,6 +350,7 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
   link->pdata       = pdata;
   link->flags       = flags;
   link->type        = type;
+  link->recvSize    = 0;
   link->recvBufSize = 0;
   link->recvBuf     = (void*)malloc(sizeof(link));
   *(icomLink_t**)link->recvBuf = link;
