@@ -6,7 +6,11 @@
 /* icom flags data type */
 typedef uint32_t icomFlags_t;
 
-
+#define ICOM_FLAG_DEFAULT    (0)
+#define ICOM_FLAG_ZERO       (1<<0)
+#define ICOM_FLAG_PROT       (1<<1)
+#define ICOM_FLAG_MAX_VALID  ICOM_FLAG_PROT
+#define ICOM_FLAG_ZERO_PROT  ((1<<0)+(1<<1))
 #define ICOM_FLAG_INVALID    (1<<31)
 
 
