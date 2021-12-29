@@ -42,6 +42,7 @@ typedef struct icomLink {
                                 holds pointer to the respective link structure) */
   uint32_t     recvBufSize; /** received data buffer size */
   icomStatus_t (*sendHandler)(icomLink_t *link, void *buf, unsigned bufSize);
+  icomStatus_t (*sendHandlerSecondary)(icomLink_t *link, void *buf, unsigned bufSize);
   icomStatus_t (*recvHandler)(icomLink_t *link, void **buf, unsigned *bufSize);
 } icomLink_t;
 

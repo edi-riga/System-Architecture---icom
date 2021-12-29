@@ -14,22 +14,18 @@
 #include "macro.h"
 
 
-static icomStatus_t link_send(icomLink_t *link, void *buf, unsigned bufSize){
-  icomMsgHeader_t header;
-  int ret;
-
-  /* Retreive private data structure */
-  icomLinkSocket_t *pdata = link->pdata;
-
-  /* Construct and send header */
-  header.type    = ICOM_TYPE_SOCKET_TX;
-  header.flags   = 0;
-  header.bufSize = bufSize;
-  ret = send(pdata->fd, &header, sizeof(header), 0);
-  if(ret == -1){
+static icomStatus_t link_sendHeader(icomLinkSocket_t *pdata, icomMsgHeader_t *header){
+  if(send(pdata->fd, header, sizeof(*header), 0) == -1){
     _SE("Send failed (header)");
     return ICOM_ERROR;
   }
+  return ICOM_SUCCESS;
+}
+
+
+static icomStatus_t link_sendData(icomLinkSocket_t *pdata, void *buf, unsigned bufSize){
+  int ret;
+  _D("Sending data from %p (%u bytes)", buf, bufSize);
 
   /* Send data */
   ret = send(pdata->fd, buf, bufSize, 0);
@@ -44,6 +40,42 @@ static icomStatus_t link_send(icomLink_t *link, void *buf, unsigned bufSize){
   }
 
   return ICOM_SUCCESS;
+}
+
+
+static icomStatus_t link_sendDefault(icomLink_t *link, void *buf, unsigned bufSize){
+  icomMsgHeader_t header;
+  _D("Sending (Default handler)");
+
+  /* Retreive private data structure */
+  icomLinkSocket_t *pdata = link->pdata;
+
+  /* Construct and send header */
+  header = (icomMsgHeader_t){ICOM_TYPE_SOCKET_TX, link->flags, bufSize};
+  if(link_sendHeader(pdata, &header) != ICOM_SUCCESS){
+    return ICOM_ERROR;
+  }
+
+  /* Send data */
+  return link_sendData(pdata, buf, bufSize);
+}
+
+
+static icomStatus_t link_sendZero(icomLink_t *link, void *buf, unsigned bufSize){
+  icomMsgHeader_t header;
+  _D("Sending (Zero handler)");
+
+  /* Retreive private data structure */
+  icomLinkSocket_t *pdata = link->pdata;
+
+  /* Construct and send header */
+  header = (icomMsgHeader_t){ICOM_TYPE_SOCKET_TX, link->flags, bufSize};
+  if(link_sendHeader(pdata, &header) != ICOM_SUCCESS){
+    return ICOM_ERROR;
+  }
+
+  /* Send data */
+  return link_sendData(pdata, &buf, sizeof(void*));
 }
 
 
@@ -66,7 +98,7 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
 
   /* Reallocate input buffer */
   if(link->recvBufSize != header.bufSize){
-    link->recvBufSize = header.bufSize;
+    link->recvBufSize = (header.flags & ICOM_FLAG_ZERO) ? sizeof(void*) : header.bufSize;
     link->recvBuf     = (void*)realloc(link->recvBuf-sizeof(link), sizeof(link) + link->recvBufSize);
     link->recvBuf    += sizeof(link);
   }
@@ -80,11 +112,11 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
     }
 
     bytesReceived += ret;
-  } while( (ret != -1) && (bytesReceived != header.bufSize));
+  } while( (ret != -1) && (bytesReceived != link->recvBufSize));
 
   /* Setup output arguments */
-  *buf     = link->recvBuf;
-  *bufSize = bytesReceived;
+  *buf     = (header.flags & ICOM_FLAG_ZERO) ? *(void**)link->recvBuf : link->recvBuf;
+  *bufSize = (header.flags & ICOM_FLAG_ZERO) ? header.bufSize         : bytesReceived;
 
   /* Check if size of requested and sent data is equal */
   if(bytesReceived != link->recvBufSize){
@@ -115,8 +147,8 @@ static icomStatus_t link_connectAndSend(icomLink_t *link, void *buf, unsigned bu
     }
   }
 
-  /* Assuming we are connected, switch future handler just send */
-  link->sendHandler = link_send;
+  /* Assuming we are connected, switch future handler to a connected one */
+  link->sendHandler = link->sendHandlerSecondary;
 
   /* Call send handler */
   return link->sendHandler(link, buf, bufSize);
@@ -214,7 +246,8 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
   }
 
   /* set up handlers */
-  link->sendHandler = (not_connected) ? (link_connectAndSend) : (link_send);
+  link->sendHandlerSecondary = (flags & ICOM_FLAG_ZERO) ? (link_sendZero) : (link_sendDefault);
+  link->sendHandler = (not_connected) ? (link_connectAndSend) : (link->sendHandlerSecondary);
   link->recvHandler = link_recvNotImplemented;
 
   pdata->ip   = strdup(ip);

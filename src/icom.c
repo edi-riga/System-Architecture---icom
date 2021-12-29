@@ -134,7 +134,7 @@ icom_t* icom_init(const char *comString){
   /* get communication flags */
   comFlags = icom_stringToFlags(fieldArray[1]);
   if(comType & ICOM_FLAG_INVALID){
-    _E("Inbalid configuration");
+    _E("Invalid configuration");
     ret = (icom_t*)ICOM_ELOOKUP;
     goto failure_getFlags;
   }
@@ -238,6 +238,7 @@ icomStatus_t icom_recv1(icom_t *icom){ //, void **buf, unsigned *bufSize){
 icomStatus_t icom_recv3(icom_t *icom, void **buf, unsigned *bufSize){
   icomStatus_t status[icom->comCount];
 
+  /* TODO: reverse order */
   for(int i=0; i<icom->comCount; i++){
     status[i] = icom->comConnections[i].recvHandler(icom->comConnections+i, buf, bufSize);
   }

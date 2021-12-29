@@ -5,7 +5,7 @@
 static const char* icomFlagStrings[] = {
   "zero",      // ICOM_FLAG_ZERO
   "prot",      // ICOM_FLAG_PROT
-//  "prot,zero", // ICOM_FLAG_ZERO | ICOM_FLAG_PROT
+//  "prot,zero", // ICOM_FLAG_ZERO | ICOM_FLAG_PROT TODO: create solution for combining flags
 };
 
 /* Should be elaborated when additional flags are added */

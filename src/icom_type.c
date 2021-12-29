@@ -1,7 +1,7 @@
 #include <string.h>
 #include "icom_type.h"
 
-const char* icomTypeStrings[] = {
+static const char* icomTypeStrings[] = {
   "socket_tx",
   "socket_rx",
   "fifo_tx",
