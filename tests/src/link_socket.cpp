@@ -66,6 +66,34 @@ TEST(link_socket, transfer_simple){
   icom_deinit(icomBind);
 }
 
+TEST(link_socket, transfer_simpleZero){
+  icom_t *icomBind, *icomConnect;
+  icomStatus_t status;
+  thread_send_t thread_pdata;
+  pthread_t pid;
+  char *rxBuf, txBuf[4] = "abc";
+  uint32_t rxBufSize, txBufSize = sizeof(txBuf);
+  void *ret;
+
+  icomConnect = icom_init("socket_tx|zero|127.0.0.1:8889");
+  EXPECT_FALSE(ICOM_IS_ERR(icomConnect));
+  icomBind = icom_init("socket_rx|zero|*:8889");
+  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
+
+  thread_pdata = {icomConnect, txBuf, txBufSize};
+  pthread_create(&pid, NULL, thread_send, &thread_pdata);
+  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
+  EXPECT_EQ(status,    ICOM_SUCCESS);
+  EXPECT_EQ(rxBufSize, txBufSize);
+  EXPECT_STREQ(rxBuf,  txBuf);
+
+  pthread_join(pid, &ret);
+  EXPECT_EQ((uint64_t)ret, ICOM_SUCCESS);
+  icom_deinit(icomConnect);
+  icom_deinit(icomBind);
+}
+
+
 
 TEST(link_socket, transfer_varying_size){
   icom_t *icomBind, *icomConnect;
