@@ -10,9 +10,9 @@ TEST(string_parser, null_string){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(ret == -1);
+  EXPECT_EQ(ret, -1);
   EXPECT_TRUE(strArray == NULL);
-  EXPECT_TRUE(strCount == 0);
+  EXPECT_EQ(strCount, 0);
 }
 
 TEST(string_parser, single_string){
@@ -22,7 +22,7 @@ TEST(string_parser, single_string){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
+  EXPECT_EQ(0, ret);
   EXPECT_TRUE(1 == strCount);
   EXPECT_STREQ(strArray[0], "inproc");
 
@@ -36,7 +36,7 @@ TEST(string_parser, single_string_brackets){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
+  EXPECT_EQ(0, ret);
   EXPECT_TRUE(1 == strCount);
   EXPECT_STREQ(strArray[0], "inproc0");
 
@@ -51,10 +51,10 @@ TEST(string_parser, two_strings_comma){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
-  EXPECT_TRUE(0 == strcmp(strArray[0], "inproc0"));
-  EXPECT_TRUE(0 == strcmp(strArray[1], "inproc1"));
-  EXPECT_TRUE(2 == strCount);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(0, strcmp(strArray[0], "inproc0"));
+  EXPECT_EQ(0, strcmp(strArray[1], "inproc1"));
+  EXPECT_EQ(2, strCount);
 
   parser_deinitStrArray(strArray, strCount);
 }
@@ -66,8 +66,8 @@ TEST(string_parser, two_strings_brackets){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
-  EXPECT_TRUE(2 == strCount);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(2, strCount);
   EXPECT_STREQ(strArray[0], "inproc0");
   EXPECT_STREQ(strArray[1], "inproc1");
 
@@ -81,8 +81,8 @@ TEST(string_parser, three_strings_comma_brackets){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
-  EXPECT_TRUE(3 == strCount);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(3, strCount);
   EXPECT_STREQ(strArray[0], "inproc0");
   EXPECT_STREQ(strArray[1], "inproc1");
   EXPECT_STREQ(strArray[2], "inproc2");
@@ -97,8 +97,8 @@ TEST(string_parser, three_strings_brackets_comma){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
-  EXPECT_TRUE(3 == strCount);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(3, strCount);
   EXPECT_STREQ(strArray[0], "inproc0");
   EXPECT_STREQ(strArray[1], "inproc1");
   EXPECT_STREQ(strArray[2], "inproc2");
@@ -113,8 +113,8 @@ TEST(string_parser, four_strings_brackets_comma){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
-  EXPECT_TRUE(4 == strCount);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(4, strCount);
   EXPECT_STREQ(strArray[0], "inproc0");
   EXPECT_STREQ(strArray[1], "inproc1");
   EXPECT_STREQ(strArray[2], "inproc2");
@@ -130,8 +130,8 @@ TEST(string_parser, four_strings_comma_brackets){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
-  EXPECT_TRUE(4 == strCount);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(4, strCount);
   EXPECT_STREQ(strArray[0], "inproc0");
   EXPECT_STREQ(strArray[1], "inproc1");
   EXPECT_STREQ(strArray[2], "inproc2");
@@ -147,8 +147,8 @@ TEST(string_parser, five_strings_comma_brackets){
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
-  EXPECT_TRUE(0 == ret);
-  EXPECT_TRUE(5 == strCount);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
   EXPECT_STREQ(strArray[0], "inproc0");
   EXPECT_STREQ(strArray[1], "inproc1");
   EXPECT_STREQ(strArray[2], "inproc2");
