@@ -1,8 +1,14 @@
+#include <stdlib.h>
+#include <time.h>
 #include <pthread.h>
 #include "gtest/gtest.h"
+#include "link_common.h"
+
 extern "C" {
   #include "icom.h"
 }
+
+#define INIT_TEST_COUNT 100
 
 ////////////////////////////////////////////////////////////////////////////////
 // UTILITIES
@@ -19,214 +25,107 @@ void* thread_send(void *p){
   return (void*)icom_send(pdata->icom, pdata->buf, pdata->bufSize);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - INITIALIZATION/DEINITIALIZATION
+////////////////////////////////////////////////////////////////////////////////
+TEST(link_socket, init_rx_default){
+  link_common_initialization("socket_rx|default|*:8889", INIT_TEST_COUNT);
+}
+
+TEST(link_socket, init_tx_default){
+  link_common_initialization("socket_tx|default|127.0.0.1:8889", INIT_TEST_COUNT);
+}
+
+TEST(link_socket, init_rx_zero){
+  link_common_initialization("socket_rx|zero|*:8889", INIT_TEST_COUNT);
+}
+
+TEST(link_socket, init_tx_zero){
+  link_common_initialization("socket_tx|zero|127.0.0.1:8889", INIT_TEST_COUNT);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
-// TEST-RELATED
+// TEST-RELATED - SIMPLE TRANSFER
 ////////////////////////////////////////////////////////////////////////////////
-
-TEST(link_socket, init_bind){
-  icom_t *icomBind;
-  icomBind = icom_init("socket_rx|default|*:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
-  icom_deinit(icomBind);
+TEST(link_socket, transfer_simple_default){
+  link_common_simple(
+    "socket_tx|default|127.0.0.1:8889",
+    "socket_rx|default|*:8889",
+    12); // size in bytes
 }
 
-TEST(link_socket, init_connect){
-  icom_t *icomConnect;
-  icomConnect = icom_init("socket_tx|default|127.0.0.1:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect));
-  icom_deinit(icomConnect);
-}
-
-
-TEST(link_socket, transfer_simple){
-  icom_t *icomBind, *icomConnect;
-  icomStatus_t status;
-  thread_send_t thread_pdata;
-  pthread_t pid;
-  char *rxBuf, txBuf[4] = "abc";
-  uint32_t rxBufSize, txBufSize = sizeof(txBuf);
-  void *ret;
-
-  icomConnect = icom_init("socket_tx|default|127.0.0.1:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect));
-  icomBind = icom_init("socket_rx|default|*:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
-
-  thread_pdata = {icomConnect, txBuf, txBufSize};
-  pthread_create(&pid, NULL, thread_send, &thread_pdata);
-  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status,    ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize);
-  EXPECT_STREQ(rxBuf,  txBuf);
-
-  pthread_join(pid, &ret);
-  EXPECT_EQ((uint64_t)ret, ICOM_SUCCESS);
-  icom_deinit(icomConnect);
-  icom_deinit(icomBind);
-}
-
-TEST(link_socket, transfer_simpleZero){
-  icom_t *icomBind, *icomConnect;
-  icomStatus_t status;
-  thread_send_t thread_pdata;
-  pthread_t pid;
-  char *rxBuf, txBuf[4] = "abc";
-  uint32_t rxBufSize, txBufSize = sizeof(txBuf);
-  void *ret;
-
-  icomConnect = icom_init("socket_tx|zero|127.0.0.1:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect));
-  icomBind = icom_init("socket_rx|zero|*:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
-
-  thread_pdata = {icomConnect, txBuf, txBufSize};
-  pthread_create(&pid, NULL, thread_send, &thread_pdata);
-  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status,    ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize);
-  EXPECT_STREQ(rxBuf,  txBuf);
-
-  pthread_join(pid, &ret);
-  EXPECT_EQ((uint64_t)ret, ICOM_SUCCESS);
-  icom_deinit(icomConnect);
-  icom_deinit(icomBind);
+TEST(link_socket, transfer_simple_zero){
+  link_common_simple(
+    "socket_tx|zero|127.0.0.1:8889",
+    "socket_rx|zero|*:8889",
+    12); // size in bytes
 }
 
 
+////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - VARIED TRANSFERS
+////////////////////////////////////////////////////////////////////////////////
+TEST(link_socket, transfer_varied_default){
+  link_common_varied(
+    "socket_tx|zero|127.0.0.1:8889",
+    "socket_rx|zero|*:8889",
+    100); // TEST_COUNT
+}
 
-TEST(link_socket, transfer_varying_size){
-  icom_t *icomBind, *icomConnect;
-  icomStatus_t status;
-  thread_send_t thread_pdata;
-  pthread_t pid;
-  char *rxBuf, txBuf[4] = "abc";
-  uint32_t rxBufSize, txBufSize = sizeof(txBuf);
-  void *ret;
-
-  icomConnect = icom_init("socket_tx|default|127.0.0.1:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect));
-  icomBind = icom_init("socket_rx|default|*:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
-
-  /* Send 4 bytes */
-  thread_pdata = {icomConnect, txBuf, txBufSize};
-  pthread_create(&pid, NULL, thread_send, &thread_pdata);
-  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status,    ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize);
-  EXPECT_STREQ(rxBuf,  txBuf);
-  pthread_join(pid, &ret);
-  EXPECT_EQ((uint64_t)ret, ICOM_SUCCESS);
-
-  /* Send 3 bytes */
-  txBuf[2] = '\0';
-  thread_pdata = {icomConnect, txBuf, 3};
-  pthread_create(&pid, NULL, thread_send, &thread_pdata);
-  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status,    ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, 3);
-  EXPECT_STREQ(rxBuf,  txBuf);
-  pthread_join(pid, &ret);
-  EXPECT_EQ((uint64_t)ret, ICOM_SUCCESS);
-
-  /* Send 2 bytes */
-  txBuf[1] = '\0';
-  thread_pdata = {icomConnect, txBuf, 2};
-  pthread_create(&pid, NULL, thread_send, &thread_pdata);
-  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status,    ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, 2);
-  EXPECT_STREQ(rxBuf,  txBuf);
-  pthread_join(pid, &ret);
-  EXPECT_EQ((uint64_t)ret, ICOM_SUCCESS);
-
-  icom_deinit(icomConnect);
-  icom_deinit(icomBind);
+TEST(link_socket, transfer_varied_zero){
+  link_common_varied(
+    "socket_tx|zero|127.0.0.1:8889",
+    "socket_rx|zero|*:8889",
+    100); // TEST_COUNT
 }
 
 
-TEST(link_socket, transfer_10MB){
-  icom_t *icomBind, *icomConnect;
-  icomStatus_t status;
-  thread_send_t thread_pdata;
-  pthread_t pid;
-  uint8_t *rxBuf, *txBuf;
-  uint32_t rxBufSize, txBufSize = 10*1024*1024*sizeof(*txBuf);
-  void *ret;
+////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - LARGE TRANSFERS
+////////////////////////////////////////////////////////////////////////////////
+TEST(link_socket, transfer_100Mb_default){
+  link_common_simple(
+    "socket_tx|default|127.0.0.1:8889",
+    "socket_rx|default|*:8889",
+    100*1024*1024); // size in bytes
+}
 
-  icomConnect = icom_init("socket_tx|default|127.0.0.1:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect));
-  icomBind = icom_init("socket_rx|default|*:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
-
-  txBuf = (uint8_t*)malloc(txBufSize);
-  EXPECT_FALSE(txBuf == NULL);
-  for(int i=0; i<txBufSize/sizeof(*txBuf); i++){
-    txBuf[i] = i;
-  }
-
-  thread_pdata = {icomConnect, txBuf, txBufSize};
-  pthread_create(&pid, NULL, thread_send, &thread_pdata);
-  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status, ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize);
-  EXPECT_TRUE(memcmp(rxBuf, txBuf, txBufSize) == 0);
-  pthread_join(pid, &ret);
-  EXPECT_EQ((uint64_t)ret, ICOM_SUCCESS);
-
-  icom_deinit(icomConnect);
-  icom_deinit(icomBind);
+TEST(link_socket, transfer_100Mb_zero){
+  link_common_simple(
+    "socket_tx|zero|127.0.0.1:8889",
+    "socket_rx|zero|*:8889",
+    100*1024*1024); // size in bytes
 }
 
 
-TEST(link_socket, transfer_multiple){
-  icom_t *icomBind, *icomConnect0, *icomConnect1;
-  icomStatus_t status;
-  thread_send_t thread_pdata0, thread_pdata1;
-  pthread_t pid[2];
-  uint8_t *rxBuf, *txBuf;
-  uint32_t rxBufSize, txBufSize = 10*sizeof(*txBuf);
-  void *ret;
+////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - FAN-IN COMMUNICATION
+////////////////////////////////////////////////////////////////////////////////
+TEST(link_socket, transfer_fanin_default){
+  const char *connectStrings[] = {
+    "socket_tx|default|127.0.0.1:8889", 
+    "socket_tx|default|127.0.0.1:8890", 
+    "socket_tx|default|127.0.0.1:8891", 
+  };
+  const char *bindString = "socket_rx|default|*:[8889-8891]";
+  link_common_fanin(connectStrings, bindString, 3);
+}
 
-  icomConnect0 = icom_init("socket_tx|default|127.0.0.1:8889");
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect0));
-  icomConnect1 = icom_init("socket_tx|default|127.0.0.1:8890");
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect1));
-  icomBind = icom_init("socket_rx|default|*:[8889-8890]");
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
-
-  txBuf = (uint8_t*)malloc(txBufSize);
-  EXPECT_FALSE(txBuf == NULL);
-  for(int i=0; i<txBufSize/sizeof(*txBuf); i++){
-    txBuf[i] = i;
-  }
-
-  thread_pdata0 = {icomConnect0, txBuf, txBufSize};
-  pthread_create(&pid[0], NULL, thread_send, &thread_pdata0);
-  thread_pdata1 = {icomConnect1, txBuf, txBufSize};
-  pthread_create(&pid[1], NULL, thread_send, &thread_pdata1);
-
-  status = icom_recv(icomBind, (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status, ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize);
-  EXPECT_EQ(memcmp(rxBuf, txBuf, txBufSize), 0);
-  icom_nextBuffer(icomBind, (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status, ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize);
-  EXPECT_EQ(memcmp(rxBuf, txBuf, txBufSize), 0);
-
-  pthread_join(pid[0], &ret);
-  EXPECT_TRUE((uint64_t)ret == ICOM_SUCCESS);
-  pthread_join(pid[1], &ret);
-  EXPECT_TRUE((uint64_t)ret == ICOM_SUCCESS);
-
-  icom_deinit(icomConnect0);
-  icom_deinit(icomConnect1);
-  icom_deinit(icomBind);
+TEST(link_socket, transfer_fanin_zero){
+  const char *connectStrings[] = {
+    "socket_tx|zero|127.0.0.1:8889", 
+    "socket_tx|zero|127.0.0.1:8890", 
+    "socket_tx|zero|127.0.0.1:8891", 
+  };
+  const char *bindString = "socket_rx|zero|*:[8889-8891]";
+  link_common_fanin(connectStrings, bindString, 3);
 }
 
 
+////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - COMPLEX
+////////////////////////////////////////////////////////////////////////////////
 TEST(link_socket, transfer_complex){
   icom_t *icomBind0, *icomBind1, *icomConnect0, *icomConnect1, *icomConnect2;
   icomStatus_t status;
