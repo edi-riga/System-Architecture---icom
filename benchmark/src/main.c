@@ -11,7 +11,7 @@
 #include "notification.h"
 #include "simple_timer.h"
 
-#define AVERAGING_TEST_COUNT     (10)
+#define AVERAGING_TEST_COUNT     (20)
 #define TEST_SIZE_MIN            (4)
 #define TEST_SIZE_LOG_INCREMENTS (23)
 #define TEST_SIZE_MAX            (TEST_SIZE_MIN << TEST_SIZE_LOG_INCREMENTS)
@@ -35,6 +35,7 @@ typedef struct {
 /* communication scenarios for benchmarking */
 const char *g_com_strings[][2] = {
   {"socket_tx|default|127.0.0.1:8889", "socket_rx|default|*:8889"},
+  {"socket_tx|zero|127.0.0.1:8889",    "socket_rx|zero|*:8889"},
 };
 
 
@@ -73,16 +74,16 @@ const char* disp_bytesGetUnits(uint64_t bytes){
 
 float disp_speedGetNum(uint64_t bps){
   if(bps >= 1000*1000*1000){   // Gbps
-    return bps/(1000*1000*1000);
+    return ((float)(bps))/(1000*1000*1000);
 
   } else if(bps>= 1000*1000){  // Mbps
-    return bps/(1000*1000);
+    return ((float)(bps))/(1000*1000);
 
   } else if(bps>= 1000){       // Kbps
-    return bps/(1000);
+    return ((float)(bps))/(1000);
 
   } else {                     // bps
-    return bps;
+    return (float)bps;
   } 
 }
 
@@ -104,7 +105,7 @@ const char* disp_speedGetUnits(uint64_t bps){
 static inline void disp_scenarios(){
   _I("### SCENARIOS ###");
   for(int i=0; i<STATIC_ARRAY_SIZE(g_com_strings); i++){
-    _I("Scenario - %d (Tx: \"%s\", Rx: \"%s\")", 0, g_com_strings[i][0], g_com_strings[i][1]);
+    _I("Scenario - %d (Tx: \"%s\", Rx: \"%s\")", i, g_com_strings[i][0], g_com_strings[i][1]);
   }
 }
 
@@ -216,7 +217,7 @@ icomStatus_t test(uint64_t *timeUs, const char *comStrings[2], uint32_t transfer
   do{
     bytes = read(fdRandom, bufTx, transferSize-bytes_total);
     bytes_total += bytes;
-  } while((bytes_total != transferSize) && (bytes == -1));
+  } while((bytes_total != transferSize) && (bytes != -1));
 
   if((bytes_total != transferSize) || (bytes == -1)){
     _SE("Failed to initialize buffer memory");
@@ -287,18 +288,20 @@ int main(void){
 
   /* run all the tests */
   for(int s=0; s<STATIC_ARRAY_SIZE(g_com_strings); s++){
-  for(int i=0; i<TEST_SIZE_LOG_INCREMENTS; i++){
-    _I("Performing %u tests for %lu bytes", AVERAGING_TEST_COUNT, sizes[i]);
-    for(int j=0; j<AVERAGING_TEST_COUNT; j++){
-      status = test(&time, g_com_strings[0], sizes[i], fd);
-      if(status != ICOM_SUCCESS){
-        _E("Test failed");
-        continue;
+    _I("Communication strings: \"%s\" and \"%s\"", g_com_strings[s][0], g_com_strings[s][1]);
+    for(int i=0; i<TEST_SIZE_LOG_INCREMENTS; i++){
+      _I("Performing %u tests for %lu bytes", AVERAGING_TEST_COUNT, sizes[i]);
+      for(int j=0; j<AVERAGING_TEST_COUNT; j++){
+        status = test(&time, g_com_strings[s], sizes[i], fd);
+        if(status != ICOM_SUCCESS){
+          _E("Test failed");
+          continue;
+        }
+        times[s][i] += time;
       }
-      times[s][i] += time;
+      times[s][i] /= TEST_SIZE_LOG_INCREMENTS;
     }
-    times[s][i] /= TEST_SIZE_LOG_INCREMENTS;
-  }}
+  }
 
 
   /* print scenarios and results to the terminal */
