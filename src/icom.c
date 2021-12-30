@@ -1,456 +1,307 @@
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
-#include <pthread.h>
-#include <zmq.h>
 
 #include "icom.h"
-#include "icom_common.h"
+#include "icom_type.h"
+#include "icom_flags.h"
+#include "icom_status.h"
+
+#include "config.h"
+#include "macro.h"
+#include "notification.h"
 #include "string_parser.h"
-#include "notifying.h"
+
+#include "link_zmq.h"
+#include "link_fifo.h"
+#include "link_socket.h"
 
 
-int icom_init(){
-    getContext();  // initializes zmq context
-    return 0;
+icomStatus_t (*icomInitHandlers[])(icomLink_t*, icomType_t, const char*, icomFlags_t) = {
+  icom_initSocketConnect,
+  icom_initSocketBind,
+  icom_initFifo,
+  icom_initZmqPush,
+  icom_initZmqPull,
+  icom_initZmqPub,
+  icom_initZmqSub,
+  icom_initZmqReq,
+  icom_initZmqRep,
+};
+
+void (*icomDeinitHandlers[])(icomLink_t*) = {
+  icom_deinitSocket,
+  icom_deinitSocket,
+  icom_deinitFifo,
+  icom_deinitZmqPush,
+  icom_deinitZmqPull,
+  icom_deinitZmqPub,
+  icom_deinitZmqSub,
+  icom_deinitZmqReq,
+  icom_deinitZmqRep,
+};
+
+
+icomStatus_t retreiveComType(const char *comString, icomType_t *type){
+  char typeString[MAX_TYPE_STRING_LENGTH+1];
+
+  /* retreive communication type string */
+  int r = sscanf(comString, "%" STR(MAX_TYPE_STRING_LENGTH)  "[^:]:", typeString);
+  if(r != 1){
+    _E("Failed to parse communication type string, %d", r);
+    return ICOM_EINVAL;
+  }
+
+  /* retreive the actual communication type */
+  *type = icom_stringToType(typeString);
+  if(*type == ICOM_TYPE_NONE){
+    _E("Failed to lookup communication type");
+    return ICOM_ELOOKUP;
+  }
+
+  return ICOM_SUCCESS;
 }
 
-void icom_release(){
-    zmq_ctx_destroy(getContext());
+icomStatus_t icom_initGeneric(icomLink_t *connection, icomType_t type, const char *comString, icomFlags_t flags){
+  icomStatus_t status;
+
+  _D("%u (%s) type requested with flags - %u (%s) - and communication string: \"%s\"",
+    type, icom_typeToString(type),
+    flags, icom_flagsToString(flags),
+    comString);
+
+  if(type > ICOM_TYPE_AUTO){
+    _E("Invalid icom type");
+    return ICOM_ITYPE;
+  }
+
+  if(type < ICOM_TYPE_AUTO){
+    return icomInitHandlers[type](connection, type, comString, flags);
+  }
+
+  /* otherwise a straightforward trial and error method (should work until zmq) */
+  for(int i=0; i<ICOM_TYPE_AUTO; i++){
+    status = icomInitHandlers[i](connection, type, comString, flags);
+    if(status != ICOM_SUCCESS){
+      return ICOM_SUCCESS;
+    }
+  }
+
+  return ICOM_ERROR;
+}
+
+void icom_deinitGeneric(icomLink_t* connection){
+  icomDeinitHandlers[connection->type](connection);
 }
 
 
-/*============================================================================*/
-/*                             ICOM COMMON - API                              */
-/*============================================================================*/
+icom_t* icom_init(const char *comString){
+  char **fieldArray; uint32_t fieldCount;
+  icomType_t comType; icomFlags_t comFlags;
+  int i;
+  int r;
+  icomStatus_t status;
+  icom_t *icom, *ret;
 
-void icom_deinit(icom_t *icom){
-    /* release memory buffers, but and check  */
-    if(hasAllocatedBuffers(icom)){
-        _D("Releasing allocated buffers");
-        for(int i=0; i<icom->packetCount; i++){
-            free(icom->packets[i].payload);
-        }
+  /* allocate and initialize icom structure */
+  icom = (icom_t*)malloc(sizeof(icom_t));
+  if(!icom){
+    _E("Failed to allocate memory");
+    return (icom_t*)ICOM_ENOMEM;
+  }
+
+  /* parse fields in the communication string */
+  r = parser_initFields(&fieldArray, &fieldCount, comString, ICOM_DELIMITER);
+  if(r != 0){
+    _E("Failed to parse communication string");
+    ret = (icom_t*)ICOM_EINVAL;
+    goto failure_initFields;
+  }
+
+  for(i=0; i<fieldCount; i++){
+  _D("Field %d in communication string: %s", i, fieldArray[i]);
+  }
+
+  /* get communication type (1st field string) */
+  comType = icom_stringToType(fieldArray[0]);
+  if(comType == ICOM_TYPE_NONE){
+    _E("Invalid configuration");
+    ret = (icom_t*)ICOM_ELOOKUP;
+    goto failure_getType;
+  }
+
+  /* get communication flags */
+  comFlags = icom_stringToFlags(fieldArray[1]);
+  if(comType & ICOM_FLAG_INVALID){
+    _E("Invalid configuration");
+    ret = (icom_t*)ICOM_ELOOKUP;
+    goto failure_getFlags;
+  }
+
+  /* parse communication strings */
+  r = parser_initStrArray(&icom->comStrings, &icom->comCount, fieldArray[2]);
+  if(r != 0){
+    _E("Failed to parse communication string");
+    ret = (icom_t*)ICOM_EINVAL;
+    goto failure_initStrArray;
+  }
+
+  /* allocate memory for connection struct array */
+  icom->comConnections = (icomLink_t*)malloc(icom->comCount*sizeof(icomLink_t));
+  if(!icom->comConnections){
+    _E("Failed to allocate memory");
+    ret = (icom_t*)ICOM_ENOMEM;
+    goto failure_malloc_connections;
+  }
+
+  /* initialize selected icom communication */
+  for(i=0; i<icom->comCount; i++){
+    status = icom_initGeneric(&(icom->comConnections[i]), comType, icom->comStrings[i], comFlags);
+    if( status != ICOM_SUCCESS ){
+      _E("Failed to initialize connection: %s", icom->comStrings[i]);
+      ret = (icom_t*)status;
+      goto failure_initGeneric;
+    }
+  }
+
+  /* deallocate communication fields (we don't need them) */
+  parser_deinitFields(fieldArray, fieldCount);
+
+  return icom;
+
+
+failure_initGeneric:
+  for(--i; i>=0; i--){
+    icom_deinitGeneric(&(icom->comConnections[i]));
+  }
+  free(icom->comConnections);
+failure_malloc_connections:
+  parser_deinitStrArray(icom->comStrings, icom->comCount);
+failure_initStrArray:
+failure_getFlags:
+failure_getType:
+  parser_deinitFields(fieldArray, fieldCount);
+failure_initFields:
+  free(icom);
+  return ret;
+}
+
+
+void icom_deinit(icom_t* icom){
+  int i;
+
+  /* deallocate connection objects */
+  for(i=0; i<icom->comCount; i++){
+    icom_deinitGeneric(&(icom->comConnections[i]));
+  }
+
+  /* deallocate connection array */
+  free(icom->comConnections);
+
+  /* deallocate communication strings */
+  parser_deinitStrArray(icom->comStrings, icom->comCount);
+
+  /* deallocate icom structure  */
+  free(icom);
+}
+
+
+icomStatus_t icom_send(icom_t *icom, void  *buf, unsigned bufSize){
+  icomStatus_t status[icom->comCount];
+
+  for(int i=0; i<icom->comCount; i++){
+    status[i] = icom->comConnections[i].sendHandler(icom->comConnections+i, buf, bufSize);
+  }
+
+  /* TODO: analyze return values */
+
+  return status[0];
+}
+
+icomStatus_t icom_recv1(icom_t *icom){ //, void **buf, unsigned *bufSize){
+  icomStatus_t status[icom->comCount];
+  void *dummyBuf;
+
+  for(int i=0; i<icom->comCount; i++){
+    status[i] = icom->comConnections[i].recvHandler(
+      icom->comConnections+i,
+      &dummyBuf,
+      &(icom->comConnections[i].recvBufSize));
+  }
+
+  /* TODO: analyze return values */
+
+  return status[0];
+}
+
+
+icomStatus_t icom_recv3(icom_t *icom, void **buf, unsigned *bufSize){
+  icomStatus_t status[icom->comCount];
+
+  /* Perform all the data receptions in reverse order. The order is reveresed
+   * so that the first buffer in the recvBuf list is returned and, therefore,
+   * the icom_nextBuffer routine indeed would return the next buffer. */
+  for(int i=icom->comCount-1; i>=0; i--){
+    status[i] = icom->comConnections[i].recvHandler(icom->comConnections+i, buf, bufSize);
+  }
+
+  /* TODO: analyze return values */
+
+  return status[0];
+}
+
+
+void* icom_nextBuffer(icom_t *icom, void **buf, unsigned *bufSize){
+  icomLink_t *link;
+  int bufIndex;
+
+  /* NULL signals a request for the first buffer, there is an ugly workaround
+   * for zero copy, i.e. if that's the case, we return pointer at the location
+   * of the buffer */
+  if(*buf == NULL){
+    *bufSize = icom->comConnections[0].recvBufSize;
+    *buf     = (icom->comConnections[0].flags & ICOM_FLAG_ZERO)
+      ? *(void**)icom->comConnections[0].recvBuf
+      :          icom->comConnections[0].recvBuf;
+    return *buf;
+  }
+
+  /* Get ready for some sad (and probably dumb) pointer magic, but at the moment
+   * I could not think of anything better :( Imporantly, for zero-copy use case,
+   * we cannot determine the buffer's link. Firstly, note that normal buffers
+   * have reference to their respective link just before the buffer address,
+   * which is not the case for zero-copy buffers. So, firstly we try to identify
+   * if the requested buffer's potential/theoretical link address indeed hits
+   * the link array address region, if that is not the case, we assume that we
+   * have been supplied with a zero-copy buffer. Further, we in a brute force
+   * manner find the corresponding bufferIndex and return "next" buffer, hence
+   * the (index+1) */
+  if( (*(void**)(*buf-sizeof(icomLink_t*)) < (void*)(icom->comConnections))
+  ||  (*(void**)(*buf-sizeof(icomLink_t*)) > (void*)(icom->comConnections + icom->comCount))){
+    for(int bufIndex=0; bufIndex<icom->comCount-1; bufIndex++){
+      if(*buf == *(void**)icom->comConnections[bufIndex].recvBuf){
+        *bufSize = icom->comConnections[bufIndex+1].recvBufSize;
+        *buf     = *(void**)icom->comConnections[bufIndex+1].recvBuf;
+        return *buf;
+      }
     }
 
-    /* destroy semaphores if they should have been allocated */
-    if(shouldInitializeSemaphores(icom)){
-        _D("Destroying semaphores");
-        for(int i=0; i<icom->packetCount; i++){
-            sem_destroy(&icom->packets[i].semWrite);
-            sem_destroy(&icom->packets[i].semRead);
-        }
-    }
-
-    _D("Unbinding sockets");
-    /* unbind sockets if necesarry */
-    if(shouldUnbindSocket(icom)){
-        for(int i=0; i<icom->socketCount; i++)
-            zmq_unbind(icom->sockets[i].socket, icom->sockets[i].string);
-    }
-
-    /* closing all opened sockets */
-    _D("Closing sockets");
-    for(int i=0; i<icom->socketCount; i++)
-        zmq_close(icom->sockets[i].socket);
-
-    /* release memory and socket buffers */
-    _D("Releasing packets");
-    free(icom->packets);
-
-    if(!icom->isDummy){
-        _D("Releasing sockets");
-        free(icom->sockets);
-    }
-
-    /* release allocated strings */
-    _D("Releasing string array");
-
-    if(!icom->isDummy){
-        parser_deinitStrArray(icom->comStrings, icom->socketCount);
-    }
-
-    /* release holding struct */
-    _D("Releasing icom struct");
-    free(icom);
-}
-
-/*============================================================================*/
-/*                           ICOM COMMON - PACKETS                            */
-/*============================================================================*/
-int icom_sendPacket(icomSocket_t *socket, icomPacket_t *packet){
-    _D("Sending header");
-    zmq_send(socket->socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
-
-    _D("Sending payload");
-    return zmq_send(socket->socket, packet->payload, packet->header.size, 0);
-}
-
-int icom_recvPacket(icomSocket_t *socket, icomPacket_t *packet){
-    _D("Receiving header");
-    zmq_recv(socket->socket, &(packet->header), sizeof(icomPacketHeader_t), 0);
-
-    _D("Receiving payload");
-    return zmq_recv(socket->socket, packet->payload, packet->header.size, 0);
-}
-
-// TODO: find more efficient
-int icom_sendPacketZero(icomSocket_t *socket, icomPacket_t *packet){
-    int size = 0;
-    _D("Sending zero copy packet");
-
-    _D("\"%s\": Sending reference to header", socket->string);
-    size += zmq_send(socket->socket, &packet->header, sizeof(icomPacketHeader_t*), 0);
-
-    _D("\"%s\": Sending reference to payload", socket->string);
-    size += zmq_send(socket->socket, &packet->payload, sizeof(icomPacketPayload_t*), 0);
-
-    _D("\"%s\": Sending reference to semWrite", socket->string);
-    size += zmq_send(socket->socket, &packet->semWrite, sizeof(sem_t*), 0);
-
-    _D("\"%s\": Sending reference to semRead", socket->string);
-    size += zmq_send(socket->socket, &packet->semRead, sizeof(sem_t*), 0);
-
-    return size;
-    //return zmq_send(socket->socket, packet, sizeof(icomPacket_t), 0);
-}
-
-// TODO: find more efficient
-int icom_recvPacketZero(icomSocket_t *socket, icomPacket_t *packet){
-    int size = 0;
-
-    _D("Receiving zero-copy packet");
-
-    _D("\"%s\": Receiving reference to header", socket->string);
-    zmq_recv(socket->socket, &packet->header, sizeof(icomPacketHeader_t*), 0);
-
-    _D("\"%s\": Receiving reference to payload", socket->string);
-    zmq_recv(socket->socket, &packet->payload, sizeof(icomPacketPayload_t*), 0);
-
-    _D("\"%s\": Receiving reference to semWrite", socket->string);
-    zmq_recv(socket->socket, &packet->semWrite, sizeof(sem_t*), 0);
-
-    _D("\"%s\": Receiving reference to semRead", socket->string);
-    zmq_recv(socket->socket, &packet->semRead, sizeof(sem_t*), 0);
-
-    return size;
-    //return zmq_recv(socket->socket, packet, sizeof(icomPacket_t), 0);
-}
-
-
-
-icomPacket_t *icom_getCurrentPacket(icom_t *icom){
-    return &(icom->packets[icom->packetIndex]);
-}
-
-/******************************************************************************/
-/******************************** PUSH SOCKETS ********************************/
-/******************************************************************************/
-icomPacket_t *icom_doPushDummy(icom_t *icom){
-    // actually there is no need for multiple buffers as we are not sending them
-    // anywhere, so just return the first allocated buffer
-    _D("Dummy communicator");
-    return &(icom->packets[0]);
-}
-
-icomPacket_t *icom_doPushDeep(icom_t *icom){
-    /* send packet sequence */
-    for(int i=0; i<icom->socketCount; i++)
-        icom_sendPacket(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
-
-    /* update buffer index */
-    if(++icom->packetIndex >= icom->packetCount)
-        icom->packetIndex = 0;
-    
-    return &(icom->packets[icom->packetIndex]);
-}
-
-icomPacket_t *icom_doPushZero(icom_t *icom){
-    /* send packet sequence */
-    for(int i=0; i<icom->socketCount; i++)
-        icom_sendPacketZero(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
-
-    /* update buffer index */
-    if(++icom->packetIndex >= icom->packetCount)
-        icom->packetIndex = 0;
-    
-    return &(icom->packets[icom->packetIndex]);
-}
-
-icomPacket_t *icom_doPushZeroProtected(icom_t *icom){
-    /* acquire write semaphore */
-    _D("Acquiring semaphore");
-    sem_wait(&(icom->packets[icom->packetIndex].semWrite));
-    
-    
-    /* wait for the posted read semaphores (TODO: avoid polling) */
-    _D("Checking read semaphore value");
-    int sem_value;
-    do{
-        sem_getvalue(&(icom->packets[icom->packetIndex].semRead), &sem_value);
-        _D("sem_value: %d", sem_value);
-    } while(sem_value != icom->socketCount);
-
-    /* send packet sequence */
-    _D("Sending packet sequence");
-    for(int i=0; i<icom->socketCount; i++)
-        icom_sendPacketZero(&(icom->sockets[i]), &(icom->packets[icom->packetIndex]));
-
-    /* post write semaphore */
-    _D("Posting semaphore");
-    sem_post(&(icom->packets[icom->packetIndex].semWrite));
-    
-    /* update buffer index */
-    _D("Updating packet index");
-    if(++icom->packetIndex >= icom->packetCount)
-        icom->packetIndex = 0;
-
-    return &(icom->packets[icom->packetIndex]);
-}
-
-
-int icom_initPushSocket(icomSocket_t *socket, char *string){
-    socket->string = string;
-    socket->inproc = (strstr("inproc", string) != NULL)? 1 : 0;
-
-    socket->socket = zmq_socket(getContext(), ZMQ_PUSH);
-    if(socket->socket == NULL){
-        _SE("Failed to create ZMQ socket");
-        return -1;
-    }
-
-    /* this is the best we can do in terms of PUSH syncronization */
-    setSockopt(socket->socket, ZMQ_SNDHWM, 1);
-
-    if( zmq_connect(socket->socket, socket->string) ){
-        _SE("Failed to connect ZMQ socket to \"%s\" string", socket->string);
-        return -1;
-    }
-
-    return 0;
-}
-
-int icom_initPushSockets(icomSocket_t **sockets, unsigned socketCount, char** comStrings){
-    *sockets = (icomSocket_t*)malloc(socketCount*sizeof(icomSocket_t));
-
-    for(int i=0; i<socketCount; i++){
-        if(icom_initPushSocket(*sockets+i, comStrings[i]) != 0 ){
-            _E("Failed to initialize PULL socket");
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-icom_t *icom_initPush(char *comString, unsigned payloadSize, unsigned packetCount, uint32_t flags){
-    /* allocate and initialize icom structure */
-    icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
-    icom->packetCount = packetCount;
-    icom->packetIndex = 0;
-    icom->flags       = flags;
-    icom->type        = ICOM_TYPE_PUSH;
-    icom->isDummy     = 0;
-    int ret;
-
-    /* check if dummy communicator is requested, further initialization not possible */
-    if(comString == NULL){
-        icom->isDummy = 1;
-        icom->socketCount = 1;
-    }
-
-    if(!icom->isDummy){
-        _D("Parsing communication strings");
-        ret = parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
-        if(ret != 0){
-            _E("Failed to parse communication string");
-            return NULL;
-        }
-    }
-
-    if(!icom->isDummy){
-        _D("Initializing push sockets");
-        ret = icom_initPushSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
-        if(ret != 0){
-            _E("Failed to initialize PUSH sockets");
-            return NULL;
-        }
-    }
-
-    _D("Initializing packets");
-    ret = icom_initPackets(icom, payloadSize);
-    if(ret != 0){
-        _E("Failed to initialize packets");
-        return NULL;
-    }
-
-    if(icom->isDummy){
-        _D("Selecting dummy communicator callback");
-        icom->cbDo    = icom_doPushDummy;
-        return icom;
-    }
-
-    /* check if zero copy is asked for (TODO: PROTECTED) */
-    _D("Selecting communications callback");
-    switch(flags){
-      case ICOM_DEFAULT:
-        icom->cbDo = icom_doPushDeep;
-        break;
-
-      case ICOM_ZERO_COPY:
-        icom->cbDo = icom_doPushZero;
-        break;
-
-      case ICOM_ZERO_COPY | ICOM_PROTECTED:
-        icom->cbDo = icom_doPushZeroProtected;
-        break;
-
-      default:
-        _W("Communication mode (0x%x) not supported, using dummy communication", flags);
-        icom->cbDo = icom_doPushDummy;
-    }
-
-    return icom;
-}
-
-void icom_deinitPush(icom_t *icom){
-    _D("Deinitializing PUSH socket");
-    /* release memory buffers */
-    for(int i=0; i<icom->packetCount; i++)
-        free(icom->packets[i].payload);
-
-    /* closing all opened sockets */
-    for(int i=0; i<icom->socketCount; i++)
-        zmq_close(icom->sockets[i].socket);
-
-    /* release memory and socket buffers */
-    free(icom->packets);
-    free(icom->sockets);
-
-    /* release allocated strings */
-    parser_deinitStrArray(icom->comStrings, icom->socketCount);
-
-    /* release holding struct */
-    free(icom);
-}
-
-
-/******************************************************************************/
-/******************************** PULL SOCKETS ********************************/
-/******************************************************************************/
-icomPacket_t *icom_doPullDummy(icom_t *icom){
     return NULL;
-}
+  }
 
-icomPacket_t *icom_doPullDeep(icom_t *icom){
-    /* receive all buffers from all sockets */
-    for(int i=0; i<icom->socketCount; i++){
-        icom_recvPacket(&(icom->sockets[i]), &(icom->packets[i]));
-    }
+  /* Non-NULL buffer value assumes request for the next buffer (1) get address
+   * for the current buffer's link; (2) get the index of the link in the
+   * connection list and increment it (try to get the "next" buffer) */
+  link = *(icomLink_t**)(*buf-sizeof(link));
+  bufIndex = (link-icom->comConnections) + 1;
 
-    return icom->packets;
-}
+  /* return "next" buffer if the index is valid */
+  if(bufIndex < icom->comCount){
+    *bufSize = icom->comConnections[bufIndex].recvBufSize;
+    *buf     = icom->comConnections[bufIndex].recvBuf;
+    return *buf;
+  }
 
-
-icomPacket_t *icom_doPullZero(icom_t *icom){
-    /* receive all buffers from all sockets */
-    for(int i=0; i<icom->socketCount; i++){
-        icom_recvPacketZero(&(icom->sockets[i]), &(icom->packets[i]));
-    }
-
-    return icom->packets;
-}
-
-icomPacket_t *icom_doPullZeroProtected(icom_t *icom){
-    /* receive all buffers from all sockets */
-    for(int i=0; i<icom->socketCount; i++){
-        if(icom->packets[i].payload != NULL){
-            _D("Posting previous semaphore");
-            sem_post(&(icom->packets[i].semRead));
-        }
-
-        _D("Receiving buffers");
-        icom_recvPacketZero(&(icom->sockets[i]), &(icom->packets[i]));
-
-        _D("Acquiring semaphore");
-        sem_wait(&(icom->packets[i].semRead));
-    }
-
-    return icom->packets;
-}
-
-
-int icom_initPullSocket(icomSocket_t *socket, char *string){
-    socket->string = string;
-    socket->inproc = (strstr("inproc", string) != NULL)? 1 : 0;
-
-    socket->socket = zmq_socket(getContext(), ZMQ_PULL);
-    if(socket->socket == NULL){
-        _SE("Failed to create ZMQ socket");
-        return -1;
-    }
-
-    /* this is the best we can do in terms of PUSH syncronization */
-    setSockopt(socket->socket, ZMQ_RCVHWM, 1);
-
-    if( zmq_bind(socket->socket, socket->string) ){
-        _SE("Failed to bind ZMQ socket to \"%s\" string", socket->string);
-        return -1;
-    }
-
-    return 0;
-}
-
-int icom_initPullSockets(icomSocket_t **sockets, unsigned socketCount, char** comStrings){
-    *sockets = (icomSocket_t*)malloc(socketCount*sizeof(icomSocket_t));
-
-    for(int i=0; i<socketCount; i++){
-        if(icom_initPullSocket(*sockets+i, comStrings[i]) != 0){
-            _E("Failed to initialize PULL socket");
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-icom_t *icom_initPull(char *comString, unsigned payloadSize, uint32_t flags){
-    /* allocate and initialize icom structure */
-    icom_t *icom = (icom_t*)malloc(sizeof(icom_t));
-    icom->flags  = flags;
-    icom->type   = ICOM_TYPE_PULL;
-    icom->packetIndex = 0;
-
-    /* check if zero copy is asked for (TODO: PROTECTED) */
-    if(flags & ICOM_ZERO_COPY){
-        if(flags & ICOM_PROTECTED){
-            icom->cbDo     = icom_doPullZeroProtected; 
-        } else{
-            icom->cbDo     = icom_doPullZero; 
-        }
-    } else {
-        icom->cbDo     = icom_doPullDeep; 
-    }
-
-    int ret = parser_initStrArray(&(icom->comStrings), &(icom->socketCount), comString);
-    if(ret != 0){
-        _E("Failed to parse communication string");
-        return NULL;
-    }
-
-    icom->packetCount = icom->socketCount;
-
-    ret = icom_initPullSockets(&(icom->sockets), icom->socketCount, icom->comStrings);
-    if(ret != 0){
-        _E("Failed to initialize PULL sockets");
-        return NULL;
-    }
-
-    ret = icom_initPackets(icom, payloadSize);
-    if(ret != 0){
-        _E("Failed to initialize packets");
-        return NULL;
-    }
-
-    return icom;
+  return NULL;
 }

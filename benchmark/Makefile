@@ -3,13 +3,13 @@ CXX:=g++
 CROSS_COMPILE?=
 DEFINES?=
 
-CFLAGS?=
+CFLAGS?=-g -std=gnu11
 LFLAGS?=
 
 OUT:=out/main.elf
 INC:=-Iinc
 INC+=-I../inc
-LIB:=-lgtest -lpthread
+LIB:=-lpthread
 LIB+=-L../out -l:libicom.a
 
 SRC:=$(shell find src -name "*.c" -o -name "*.cpp")
@@ -18,13 +18,13 @@ DEP:=$(OBJ:obj/%.o=dep/%.d)
 
 DIR:=$(sort $(dir $(OBJ) $(DEP) $(OUT)))
 
-all: libs $(DIR) $(OUT) 
+all: libs $(DIR) $(OUT)
 
 $(DIR):
 	mkdir -p $@
 
 $(OUT): ../out/libicom.a $(OBJ)
-	$(CROSS_COMPILE)$(CXX) $(LFLAGS) $(OBJ) -o $(OUT) $(LIB)
+	$(CROSS_COMPILE)$(CC) $(LFLAGS) $(OBJ) -o $(OUT) $(LIB)
 
 obj/%.c.o: src/%.c
 	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(INC) -MMD -MP -MF $(patsubst obj/%.o,dep/%.d,$@) -c -o $@ $<

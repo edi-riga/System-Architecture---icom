@@ -1,9 +1,9 @@
-CC?=gcc
+CC:=gcc
 CPP?=g++
 CROSS_COMPILE?=
 
 CFLAGS?=
-CFLAGS:=-Wall -fPIC $(CFLAGS)
+CFLAGS:=-Wall -fPIC $(CFLAGS) -O2
 LFLAGS?=
 LFLAGS:=$(LFLAGS)
 AFLAGS:=rcs
@@ -24,6 +24,7 @@ INC:=-Iinc -Ilib
 LIB?=
 LIB:=$(LIB) -lzmq
 
+.PHONY: tests
 
 all: $(OUT) done
 
@@ -32,7 +33,7 @@ done:
 	@echo "Librares: $(OUT)"
 	@echo "Tests:    tests"
 
-compile_tests:
+tests:
 	@make -C tests
 
 $(DIR):
