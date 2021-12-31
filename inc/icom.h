@@ -78,6 +78,7 @@ void icom_deinit(icom_t* icom);
 icomStatus_t icom_do(icom_t *icom);
 icomStatus_t icom_send(icom_t *icom, void  *buf, unsigned bufSize);
 icomStatus_t icom_recv1(icom_t *icom);
+icomStatus_t icom_recv2(icom_t *icom, void **buf);
 icomStatus_t icom_recv3(icom_t *icom, void **buf, unsigned *bufSize);
 
 #define icom_recv(...) \
