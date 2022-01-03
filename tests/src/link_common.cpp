@@ -184,3 +184,78 @@ void link_common_fanin(const char *connectStrings[], const char *bindString, uns
   /* deinitialize bind (receiver) object */
   icom_deinit(icomBind);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - COMPLEX
+////////////////////////////////////////////////////////////////////////////////
+void link_common_complex(
+const char *connectStrings[], // must have 3 strings
+const char *bindStrings[]     // must have 2 strings
+)
+{
+  icom_t *icomBind[2], *icomConnect[3];
+  thread_send_t thread_pdata[3];
+  const char *txBuf0 = "buffer0";
+  const char *txBuf1 = "buffer1";
+  const char *txBuf2 = "buffer2";
+  uint32_t txBufSize[] = {sizeof(txBuf0), sizeof(txBuf1), sizeof(txBuf2)};
+  char *rxBuf; uint32_t rxBufSize;
+  icomStatus_t status;
+  pthread_t pid[3];
+  void *ret;
+
+  icomConnect[0] = icom_init(connectStrings[0]);
+  EXPECT_FALSE(ICOM_IS_ERR(icomConnect[0]));
+  icomConnect[1] = icom_init(connectStrings[1]);
+  EXPECT_FALSE(ICOM_IS_ERR(icomConnect[1]));
+  icomConnect[2] = icom_init(connectStrings[2]);
+  EXPECT_FALSE(ICOM_IS_ERR(icomConnect[2]));
+  icomBind[0] = icom_init(bindStrings[0]);
+  EXPECT_FALSE(ICOM_IS_ERR(icomBind[0]));
+  icomBind[1] = icom_init(bindStrings[1]);
+  EXPECT_FALSE(ICOM_IS_ERR(icomBind[1]));
+
+  thread_pdata[0] = {icomConnect[0], (char*)txBuf0, txBufSize[0]};
+  pthread_create(&pid[0], NULL, thread_send, &thread_pdata[0]);
+  thread_pdata[1] = {icomConnect[1], (char*)txBuf1, txBufSize[1]};
+  pthread_create(&pid[1], NULL, thread_send, &thread_pdata[1]);
+  thread_pdata[2] = {icomConnect[2], (char*)txBuf2, txBufSize[2]};
+  pthread_create(&pid[2], NULL, thread_send, &thread_pdata[2]);
+
+  status = icom_recv(icomBind[0], (void**)&rxBuf, &rxBufSize);
+  EXPECT_EQ(status, ICOM_SUCCESS);
+  EXPECT_EQ(rxBufSize, txBufSize[0]);
+  EXPECT_TRUE( (memcmp(rxBuf, txBuf0, txBufSize[0]) == 0)
+            || (memcmp(rxBuf, txBuf1, txBufSize[1]) == 0));
+
+  icom_nextBuffer(icomBind[0], (void**)&rxBuf, &rxBufSize);
+  EXPECT_EQ(status, ICOM_SUCCESS);
+  EXPECT_EQ(rxBufSize, txBufSize[1]);
+  EXPECT_TRUE( (memcmp(rxBuf, txBuf0, txBufSize[0]) == 0)
+            || (memcmp(rxBuf, txBuf1, txBufSize[1]) == 0));
+
+  status = icom_recv(icomBind[1], (void**)&rxBuf, &rxBufSize);
+  EXPECT_EQ(status, ICOM_SUCCESS);
+  EXPECT_EQ(rxBufSize, txBufSize[1]);
+  EXPECT_TRUE( (memcmp(rxBuf, txBuf1, txBufSize[1]) == 0)
+            || (memcmp(rxBuf, txBuf2, txBufSize[2]) == 0));
+
+  icom_nextBuffer(icomBind[1], (void**)&rxBuf, &rxBufSize);
+  EXPECT_EQ(status, ICOM_SUCCESS);
+  EXPECT_EQ(rxBufSize, txBufSize[2]);
+  EXPECT_TRUE( (memcmp(rxBuf, txBuf1, txBufSize[1]) == 0)
+            || (memcmp(rxBuf, txBuf2, txBufSize[2]) == 0));
+
+  pthread_join(pid[0], &ret);
+  EXPECT_EQ((icomStatus_t)(uint64_t)ret, ICOM_SUCCESS);
+  pthread_join(pid[1], &ret);
+  EXPECT_EQ((icomStatus_t)(uint64_t)ret, ICOM_SUCCESS);
+  pthread_join(pid[2], &ret);
+  EXPECT_EQ((icomStatus_t)(uint64_t)ret, ICOM_SUCCESS);
+
+  icom_deinit(icomConnect[0]);
+  icom_deinit(icomConnect[1]);
+  icom_deinit(icomConnect[2]);
+  icom_deinit(icomBind[0]);
+  icom_deinit(icomBind[1]);
+}
