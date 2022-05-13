@@ -1,5 +1,11 @@
+# by default we should rely on gcc
+ifeq ($(CC),c99)
 CC:=gcc
-CPP:=g++
+else
+CC?=gcc
+endif
+
+CXX?=g++
 CROSS_COMPILE?=
 
 CFLAGS:=-Wall -fPIC -g -O2
@@ -49,7 +55,7 @@ obj/%.o: src/%.c
 	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
 
 obj/%.o: src/%.cpp
-	$(CROSS_COMPILE)$(CPP) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
+	$(CROSS_COMPILE)$(CXX) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
 
 obj/ini/%.o: lib/ini/%.c
 	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(DEFINES) $(INC) -c -o $@ $<
