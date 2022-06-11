@@ -8,9 +8,11 @@
 #define ARGUMENT_COUNT(...)  ARGUMENT_COUNT_(__VA_ARGS__, ARGUMENT_INDEXES())
 
 /* C macro (sad) concatenation logic */
-#define CONCATENATE(left, right) CONCATENATE1(left, right)
-#define CONCATENATE1(left, right) CONCATENATE2(left, right)
-#define CONCATENATE2(left, right) left##right
+#ifndef CONCATENATE
+  #define CONCATENATE(left, right) ICOM_CONCATENATE1(left, right)
+  #define ICOM_CONCATENATE1(left, right) ICOM_CONCATENATE2(left, right)
+  #define ICOM_CONCATENATE2(left, right) left##right
+#endif
 
 /* C macro to stringify */
 #define _STR(s)  #s
