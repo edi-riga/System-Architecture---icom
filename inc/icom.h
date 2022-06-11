@@ -1,13 +1,17 @@
 #ifndef _ICOM_H_
 #define _ICOM_H_
 
-#include <stdint.h>
+/* force C linkage if included from C++ */
+#ifdef __cplusplus
+  extern "C" {
+#endif
 
+
+#include <stdint.h>
 #include "icom_type.h"
 #include "icom_flags.h"
 #include "icom_status.h"
 #include "icom_config.h"
-
 #include "macro.h"
 
 /* forward declarations */
@@ -98,5 +102,11 @@ icomStatus_t icom_getBuffer3(icom_t *icom, void **buf, unsigned *bufSize);
 
 #define icom_getBuffer(...) \
   CONCATENATE(icom_getBuffer,ARGUMENT_COUNT(__VA_ARGS__)(__VA_ARGS__))
+
+
+/* force C linkage if included from C++ - STOP */
+#ifdef __cplusplus
+  }
+#endif
 
 #endif
