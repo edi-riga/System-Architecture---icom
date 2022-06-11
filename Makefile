@@ -1,5 +1,5 @@
 # by default we should rely on gcc
-ifeq ($(CC),c99)
+ifneq (,$(filter $(CC), c99 cc))
 CC:=gcc
 else
 CC?=gcc
