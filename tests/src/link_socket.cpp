@@ -64,6 +64,24 @@ TEST(link_socket, transfer_simple_zero){
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - SIMPLE REVERSE TRANSFER
+////////////////////////////////////////////////////////////////////////////////
+TEST(link_socket, transfer_simple_default_reverse){
+  link_common_simple(
+    "socket_rx|default|*:8889",
+    "socket_tx|default|127.0.0.1:8889",
+    12); // size in bytes
+}
+
+//TEST(link_socket, transfer_simple_zero_reverse){
+//  link_common_simple(
+//    "socket_rx|zero|*:8889",
+//    "socket_tx|zero|127.0.0.1:8889",
+//    12); // size in bytes
+//}
+
+
+////////////////////////////////////////////////////////////////////////////////
 // TEST-RELATED - VARIED TRANSFERS
 ////////////////////////////////////////////////////////////////////////////////
 TEST(link_socket, transfer_varied_default){
