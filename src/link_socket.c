@@ -94,7 +94,7 @@ static icomStatus_t link_sendZero(icomLink_t *link, void *buf, unsigned bufSize)
 
 static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   icomMsgHeader_t header;
-  int bytesReceived = 0;
+  int bytesReceived;
   int ret;
 
   _D("Receiving at link: %p", link);
@@ -103,16 +103,24 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   icomLinkSocket_t *pdata = link->pdata;
 
   /* Receive header */
-  ret = recv(pdata->fdAccepted, &header, sizeof(header), 0);
-  if(ret == -1){
-    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-      _D("Timeout");
-      return ICOM_TIMEOUT;
+  bytesReceived = 0;
+  do{
+    ret = recv(pdata->fdAccepted, (uint8_t*)&header+bytesReceived, sizeof(header)-bytesReceived, 0);
+    if(ret == -1){
+      if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+        _D("Timeout");
+        return ICOM_TIMEOUT;
+      }
+
+      _SE("Receive failed (header)");
+      return ICOM_ERROR;
     }
 
-    _SE("Receive failed (header)");
-    return ICOM_ERROR;
-  }
+    bytesReceived += ret;
+  } while( (ret != -1) && (bytesReceived < sizeof(header)));
+
+  _D("Link @%p in header buffer @%p  received %u bytes", link, &header, ret);
+  _D("Header type: %u; flags: %u; bufSize: %u", header.type, header.flags, header.bufSize);
 
   /* Reallocate input buffer */
   if(link->recvBufSize != header.bufSize){
@@ -123,6 +131,7 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   }
 
   /* Receive the actual data (which can be split into multiple messages) */
+  bytesReceived = 0;
   do{
     ret = recv(pdata->fdAccepted, (uint8_t*)(link->recvBuf)+bytesReceived, link->recvSize-bytesReceived, 0);
     if(ret == -1){
@@ -136,7 +145,7 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
     }
 
     bytesReceived += ret;
-  } while( (ret != -1) && (bytesReceived != link->recvSize));
+  } while( (ret != -1) && (bytesReceived < link->recvSize));
 
   /* Setup output arguments */
   *buf     = (header.flags & ICOM_FLAG_ZERO) ? *(void**)link->recvBuf : link->recvBuf;
