@@ -5,8 +5,23 @@
 static const char* icomFlagStrings[] = {
   "zero",      // ICOM_FLAG_ZERO
   "prot",      // ICOM_FLAG_PROT
+  "timeout",   // ICOM_FLAG_TIMEOUT
 //  "prot,zero", // ICOM_FLAG_ZERO | ICOM_FLAG_PROT TODO: create solution for combining flags
 };
+
+static inline icomFlags_t findFlag(const char *flagString){
+  if(strcmp(flagString, "default") == 0){
+    return 0;
+  }
+
+  for(int i=0; i<sizeof(icomFlagStrings)/sizeof(*icomFlagStrings); i++){
+    if(strcmp(flagString, icomFlagStrings[i]) == 0){
+      return (1<<i);
+    }
+  }
+
+  return ICOM_FLAG_INVALID;
+}
 
 /* Should be elaborated when additional flags are added */
 const char* icom_flagsToString(icomFlags_t flags){
@@ -24,17 +39,19 @@ const char* icom_flagsToString(icomFlags_t flags){
 
 
 icomFlags_t icom_stringToFlags(const char *flagString){
-  icomFlags_t flags = ICOM_FLAG_INVALID;
+  char **flagStrings;
+  uint32_t flagCount;
+  icomFlags_t flags = 0;
 
-  if(strstr(flagString,"default")){
-    flags = 0;
+  int ret = parser_initFields(&flagStrings, &flagCount, flagString, ',');
+  if(ret != 0){
+    _E("Failed to parse flag string");
+    return ICOM_FLAG_INVALID;
   }
 
-  for(int i=0; i<sizeof(icomFlagStrings)/sizeof(*icomFlagStrings); i++){
-    if(strstr(flagString, icomFlagStrings[i]) != NULL){
-      flags |= (1<<i);
-      flags &= (~ICOM_FLAG_INVALID); /* inefficient? */
-    }
+  /* search for the flag string */
+  for(int i=0; i<flagCount; i++){
+    flags |= findFlag(flagStrings[i]);
   }
 
   return flags;

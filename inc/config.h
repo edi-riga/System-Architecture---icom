@@ -1,6 +1,8 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#include <stdint.h>
+
 /* The maximum string length, which can be read using scan for the communication
  * type identifier. */
 #ifndef MAX_TYPE_STRING_LENGTH
@@ -15,5 +17,8 @@
 #ifndef ICOM_DELIMITER
   #define ICOM_DELIMITER  '|'
 #endif
+
+/* configuration stored in variables for potential dynamic reconfiguration */
+extern uint64_t g_timeout_usec;
 
 #endif

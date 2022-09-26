@@ -44,6 +44,22 @@ TEST(link_socket, init_tx_zero){
   link_common_initialization("socket_tx|zero|127.0.0.1:8889", INIT_TEST_COUNT);
 }
 
+TEST(link_socket, init_rx_timeout){
+  link_common_initialization("socket_rx|timeout|*:8889", INIT_TEST_COUNT);
+}
+
+TEST(link_socket, init_tx_timeout){
+  link_common_initialization("socket_tx|timeout|127.0.0.1:8889", INIT_TEST_COUNT);
+}
+
+TEST(link_socket, init_rx_zero_timeout){
+  link_common_initialization("socket_rx|zero,timeout|*:8889", INIT_TEST_COUNT);
+}
+
+TEST(link_socket, init_tx_zero_timeout){
+  link_common_initialization("socket_tx|zero,timeout|127.0.0.1:8889", INIT_TEST_COUNT);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // TEST-RELATED - SIMPLE TRANSFER
@@ -153,4 +169,19 @@ TEST(link_socket, transfer_complex){
     "socket_rx|default|*:[8889-8890]",
     "socket_rx|default|*:[8891-8892]"};
   link_common_complex(connectStrings, bindStrings);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - TIMEOUT
+////////////////////////////////////////////////////////////////////////////////
+TEST(link_socket, transfer_timeout_rx){
+  const char *bindString    = "socket_rx|timeout|*:8889";
+  const char *connectString = "socket_tx|timeout|127.0.0.1:8889";
+  link_common_timeout_rx(bindString, connectString);
+}
+
+TEST(link_socket, transfer_timeout_tx){
+  const char *bindString    = "socket_rx|timeout|*:8889";
+  const char *connectString = "socket_tx|timeout|127.0.0.1:8889";
+  link_common_timeout_tx(bindString, connectString);
 }

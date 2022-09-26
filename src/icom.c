@@ -133,7 +133,7 @@ icom_t* icom_init(const char *comString){
 
   /* get communication flags */
   comFlags = icom_stringToFlags(fieldArray[1]);
-  if(comType & ICOM_FLAG_INVALID){
+  if(comFlags & ICOM_FLAG_INVALID){
     _E("Invalid configuration");
     ret = (icom_t*)ICOM_ELOOKUP;
     goto failure_getFlags;
