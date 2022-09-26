@@ -259,3 +259,61 @@ const char *bindStrings[]     // must have 2 strings
   icom_deinit(icomBind[0]);
   icom_deinit(icomBind[1]);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// TEST-RELATED - TIMEOUT
+////////////////////////////////////////////////////////////////////////////////
+void link_common_timeout_rx(const char *icomRxStr, const char *icomTxStr){
+  icom_t *icom_rx, *icom_tx;
+  icomStatus_t status;
+  uint8_t *rxBuf;
+  uint32_t rxBufSize;
+  uint8_t txBuf[] = {1,2,3,4};
+
+  /* initialize communication objects */
+  icom_rx = icom_init(icomRxStr);
+  EXPECT_FALSE(ICOM_IS_ERR(icom_rx));
+
+  icom_tx = icom_init(icomTxStr);
+  EXPECT_FALSE(ICOM_IS_ERR(icom_tx));
+
+  /* initiate send/receive processes */
+  status = icom_recv(icom_rx, (void**)&rxBuf, &rxBufSize);
+  EXPECT_EQ(status, ICOM_TIMEOUT);
+
+  /* timeout is optional, because sending is buffered */
+  status = icom_send(icom_rx, (void*)txBuf, sizeof(txBuf));
+  EXPECT_TRUE(status == ICOM_TIMEOUT || status == ICOM_SUCCESS);
+
+  /* cleanup */
+  icom_deinit(icom_rx);
+  icom_deinit(icom_tx);
+}
+
+
+void link_common_timeout_tx(const char *icomRxStr, const char *icomTxStr){
+  icom_t *icom_rx, *icom_tx;
+  icomStatus_t status;
+  uint8_t *rxBuf;
+  uint32_t rxBufSize;
+  uint8_t txBuf[] = {1,2,3,4};
+
+  /* initialize communication objects */
+  icom_rx = icom_init(icomRxStr);
+  EXPECT_FALSE(ICOM_IS_ERR(icom_rx));
+
+  icom_tx = icom_init(icomTxStr);
+  EXPECT_FALSE(ICOM_IS_ERR(icom_tx));
+
+  /* initiate send/receive processes */
+  status = icom_recv(icom_tx, (void**)&rxBuf, &rxBufSize);
+  EXPECT_EQ(status, ICOM_TIMEOUT);
+
+  /* timeout is optional, because sending is buffered */
+  status = icom_send(icom_tx, (void*)txBuf, sizeof(txBuf));
+  EXPECT_TRUE(status == ICOM_TIMEOUT || status == ICOM_SUCCESS);
+
+  /* cleanup */
+  icom_deinit(icom_rx);
+  icom_deinit(icom_tx);
+}

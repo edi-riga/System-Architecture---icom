@@ -6,5 +6,7 @@ void link_common_simple(const char *icomTxStr, const char *icomRxStr, uint32_t t
 void link_common_varied(const char *icomTxStr, const char *icomRxStr, unsigned testCount);
 void link_common_fanin(const char *connectStrings[], const char *bindString, unsigned connectCount);
 void link_common_complex(const char *connectStrings[], const char *bindStrings[]);
+void link_common_timeout_rx(const char *icomRxStr, const char *icomTxStr);
+void link_common_timeout_tx(const char *icomRxStr, const char *icomTxStr);
 
 #endif
