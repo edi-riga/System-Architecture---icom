@@ -16,9 +16,15 @@
 
 static icomStatus_t link_sendHeader(icomLinkSocket_t *pdata, icomMsgHeader_t *header){
   if(send(pdata->fd, header, sizeof(*header), 0) == -1){
+    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+      _D("Send timeout");
+      return ICOM_TIMEOUT;
+    }
+
     _SE("Send failed (header)");
     return ICOM_ERROR;
   }
+
   return ICOM_SUCCESS;
 }
 
@@ -30,6 +36,11 @@ static icomStatus_t link_sendData(icomLinkSocket_t *pdata, void *buf, unsigned b
   /* Send data */
   ret = send(pdata->fd, buf, bufSize, 0);
   if(ret == -1){
+    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+      _D("Send timeout");
+      return ICOM_TIMEOUT;
+    }
+
     _SE("Send failed (data)");
     return ICOM_ERROR;
   }
@@ -45,6 +56,7 @@ static icomStatus_t link_sendData(icomLinkSocket_t *pdata, void *buf, unsigned b
 
 static icomStatus_t link_sendDefault(icomLink_t *link, void *buf, unsigned bufSize){
   icomMsgHeader_t header;
+  icomStatus_t status;
   _D("Sending (Default handler)");
 
   /* Retreive private data structure */
@@ -52,8 +64,8 @@ static icomStatus_t link_sendDefault(icomLink_t *link, void *buf, unsigned bufSi
 
   /* Construct and send header */
   header = (icomMsgHeader_t){ICOM_TYPE_SOCKET_TX, link->flags, bufSize};
-  if(link_sendHeader(pdata, &header) != ICOM_SUCCESS){
-    return ICOM_ERROR;
+  if( (status = link_sendHeader(pdata, &header)) != ICOM_SUCCESS){
+    return status;
   }
 
   /* Send data */
@@ -63,6 +75,7 @@ static icomStatus_t link_sendDefault(icomLink_t *link, void *buf, unsigned bufSi
 
 static icomStatus_t link_sendZero(icomLink_t *link, void *buf, unsigned bufSize){
   icomMsgHeader_t header;
+  icomStatus_t status;
   _D("Sending (Zero handler)");
 
   /* Retreive private data structure */
@@ -70,8 +83,8 @@ static icomStatus_t link_sendZero(icomLink_t *link, void *buf, unsigned bufSize)
 
   /* Construct and send header */
   header = (icomMsgHeader_t){ICOM_TYPE_SOCKET_TX, link->flags, bufSize};
-  if(link_sendHeader(pdata, &header) != ICOM_SUCCESS){
-    return ICOM_ERROR;
+  if((status = link_sendHeader(pdata, &header)) != ICOM_SUCCESS){
+    return status;
   }
 
   /* Send data */
@@ -92,7 +105,12 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   /* Receive header */
   ret = recv(pdata->fdAccepted, &header, sizeof(header), 0);
   if(ret == -1){
-    _SE("Send failed (header)");
+    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+      _D("Timeout");
+      return ICOM_TIMEOUT;
+    }
+
+    _SE("Receive failed (header)");
     return ICOM_ERROR;
   }
 
@@ -108,6 +126,11 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   do{
     ret = recv(pdata->fdAccepted, (uint8_t*)(link->recvBuf)+bytesReceived, link->recvSize-bytesReceived, 0);
     if(ret == -1){
+      if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+        _D("Timeout");
+        return ICOM_TIMEOUT;
+      }
+
       _SE("Receive failed (header)");
       return ICOM_ERROR;
     }
@@ -216,7 +239,7 @@ static icomStatus_t link_acceptAndSend(icomLink_t *link, void *buf, unsigned buf
 
   /* Assuming we have accepted the socket */
   link->sendHandler = link_sendOnAccepted;
-  
+
   return link_sendOnAccepted(link, buf, bufSize);
 }
 
@@ -231,6 +254,11 @@ static icomStatus_t link_recvOnConnected(icomLink_t *link, void **buf, unsigned 
   /* Receive header */
   ret = recv(pdata->fd, &header, sizeof(header), 0);
   if(ret == -1){
+    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+      _D("Timeout");
+      return ICOM_TIMEOUT;
+    }
+
     _SE("Send failed (header)");
     return ICOM_ERROR;
   }
@@ -247,6 +275,11 @@ static icomStatus_t link_recvOnConnected(icomLink_t *link, void **buf, unsigned 
   do{
     ret = recv(pdata->fd, (uint8_t*)(link->recvBuf)+bytesReceived, link->recvSize-bytesReceived, 0);
     if(ret == -1){
+      if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+        _D("Timeout");
+        return ICOM_TIMEOUT;
+      }
+
       _SE("Receive failed (header)");
       return ICOM_ERROR;
     }
@@ -324,6 +357,19 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
     _E("Failed to convert IP address");
     ret = ICOM_EINVAL;
     goto failure_inet_aton;
+  }
+
+  /* set timeout (if requested) */
+  if(flags & ICOM_FLAG_TIMEOUT){
+    struct timeval timeout;
+    timeout.tv_sec  = g_timeout_usec/1000000;
+    timeout.tv_usec = g_timeout_usec%1000000;
+    if( setsockopt(pdata->fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0){
+      _SW("Failed to set socket timeout option");
+    }
+    if( setsockopt(pdata->fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0){
+      _SW("Failed to set socket timeout option");
+    }
   }
 
   /* attempt connectn */
@@ -423,6 +469,19 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
     _E("Failed to convert IP address");
     ret = (icomStatus_t)ICOM_EINVAL;
     goto failure_inet_aton;
+  }
+
+  /* set timeout (if requested) */
+  if(flags & ICOM_FLAG_TIMEOUT){
+    struct timeval timeout;
+    timeout.tv_sec  = g_timeout_usec/1000000;
+    timeout.tv_usec = g_timeout_usec%1000000;
+    if( setsockopt(pdata->fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0){
+      _SW("Failed to set socket timeout option");
+    }
+    if( setsockopt(pdata->fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0){
+      _SW("Failed to set socket timeout option");
+    }
   }
 
   /* bind to the IP address */

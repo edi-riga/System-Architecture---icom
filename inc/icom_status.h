@@ -51,6 +51,7 @@ typedef enum {
   ICOM_ELOOKUP,      /** Look up error */
   ICOM_ECONNREFUSED, /** Refused connection */
   ICOM_PARTIAL,      /** Data sent partially */
+  ICOM_TIMEOUT,      /** Timeout condition */
 
   /* Number of valid codes, required for PTR_ERR and IS_ERR */
   ICOM_COUNT
