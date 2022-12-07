@@ -11,8 +11,7 @@
 #include "icom_type.h"
 #include "icom_flags.h"
 #include "icom_status.h"
-#include "icom_config.h"
-#include "macro.h"
+#include "icom_macro.h"
 
 /* forward declarations */
 typedef struct icomLink icomLink_t;

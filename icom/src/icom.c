@@ -7,9 +7,9 @@
 #include "icom_type.h"
 #include "icom_flags.h"
 #include "icom_status.h"
+#include "icom_macro.h"
 
 #include "config.h"
-#include "macro.h"
 #include "notification.h"
 #include "string_parser.h"
 

@@ -1,5 +1,5 @@
-#ifndef _MACRO_H_
-#define _MACRO_H_
+#ifndef _ICOM_MACRO_H_
+#define _ICOM_MACRO_H_
 
 /* C macro (sad) argument count retreival logic (max 5) */
 #define ARGUMENT_SELECT(_1, _2, _3, _4, _5, N, ...)  N
