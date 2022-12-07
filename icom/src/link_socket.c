@@ -8,10 +8,10 @@
 #include "icom.h"
 #include "icom_type.h"
 #include "icom_status.h"
+#include "icom_macro.h"
 #include "link_socket.h"
 #include "notification.h"
 #include "config.h"
-#include "macro.h"
 
 
 static icomStatus_t link_sendHeader(icomLinkSocket_t *pdata, icomMsgHeader_t *header){
