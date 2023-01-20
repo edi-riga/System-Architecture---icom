@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <pthread.h>
+#include <vector>
 #include "gtest/gtest.h"
 #include "link_common.h"
 
@@ -31,31 +32,25 @@ void* thread_send(void *p){
 TEST(link_socket, init_rx_default){
   link_common_initialization("socket_rx|default|*:8889", INIT_TEST_COUNT);
 }
-
-TEST(link_socket, init_tx_default){
-  link_common_initialization("socket_tx|default|127.0.0.1:8889", INIT_TEST_COUNT);
-}
-
 TEST(link_socket, init_rx_zero){
   link_common_initialization("socket_rx|zero|*:8889", INIT_TEST_COUNT);
 }
-
-TEST(link_socket, init_tx_zero){
-  link_common_initialization("socket_tx|zero|127.0.0.1:8889", INIT_TEST_COUNT);
-}
-
 TEST(link_socket, init_rx_timeout){
   link_common_initialization("socket_rx|timeout|*:8889", INIT_TEST_COUNT);
 }
-
-TEST(link_socket, init_tx_timeout){
-  link_common_initialization("socket_tx|timeout|127.0.0.1:8889", INIT_TEST_COUNT);
-}
-
 TEST(link_socket, init_rx_zero_timeout){
   link_common_initialization("socket_rx|zero,timeout|*:8889", INIT_TEST_COUNT);
 }
 
+TEST(link_socket, init_tx_default){
+  link_common_initialization("socket_tx|default|127.0.0.1:8889", INIT_TEST_COUNT);
+}
+TEST(link_socket, init_tx_zero){
+  link_common_initialization("socket_tx|zero|127.0.0.1:8889", INIT_TEST_COUNT);
+}
+TEST(link_socket, init_tx_timeout){
+  link_common_initialization("socket_tx|timeout|127.0.0.1:8889", INIT_TEST_COUNT);
+}
 TEST(link_socket, init_tx_zero_timeout){
   link_common_initialization("socket_tx|zero,timeout|127.0.0.1:8889", INIT_TEST_COUNT);
 }
@@ -65,30 +60,30 @@ TEST(link_socket, init_tx_zero_timeout){
 // TEST-RELATED - SIMPLE TRANSFER
 ////////////////////////////////////////////////////////////////////////////////
 TEST(link_socket, transfer_simple_default){
-  link_common_simple(
-    "socket_tx|default|127.0.0.1:8889",
-    "socket_rx|default|*:8889",
-    12); // size in bytes
+  for(uint32_t size=4; size<12; size++){
+    link_common_simple(
+      "socket_tx|default|127.0.0.1:8889",
+      "socket_rx|default|*:8889",
+      size);
+  }
+}
+TEST(link_socket, transfer_simple_default_reverse){
+  for(uint32_t size=4; size<12; size++){
+    link_common_simple(
+      "socket_rx|default|*:8889",
+      "socket_tx|default|127.0.0.1:8889",
+      size);
+  }
 }
 
 TEST(link_socket, transfer_simple_zero){
-  link_common_simple(
-    "socket_tx|zero|127.0.0.1:8889",
-    "socket_rx|zero|*:8889",
-    12); // size in bytes
+  for(uint32_t size=4; size<12; size++){
+    link_common_simple(
+      "socket_tx|zero|127.0.0.1:8889",
+      "socket_rx|zero|*:8889",
+      size); // size in bytes
+  }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////
-// TEST-RELATED - SIMPLE REVERSE TRANSFER
-////////////////////////////////////////////////////////////////////////////////
-TEST(link_socket, transfer_simple_default_reverse){
-  link_common_simple(
-    "socket_rx|default|*:8889",
-    "socket_tx|default|127.0.0.1:8889",
-    12); // size in bytes
-}
-
 //TEST(link_socket, transfer_simple_zero_reverse){
 //  link_common_simple(
 //    "socket_rx|zero|*:8889",
@@ -104,14 +99,14 @@ TEST(link_socket, transfer_varied_default){
   link_common_varied(
     "socket_tx|zero|127.0.0.1:8889",
     "socket_rx|zero|*:8889",
-    100); // TEST_COUNT
+    100);
 }
 
 TEST(link_socket, transfer_varied_zero){
   link_common_varied(
     "socket_tx|zero|127.0.0.1:8889",
     "socket_rx|zero|*:8889",
-    100); // TEST_COUNT
+    100);
 }
 
 
@@ -136,39 +131,58 @@ TEST(link_socket, transfer_100Mb_zero){
 ////////////////////////////////////////////////////////////////////////////////
 // TEST-RELATED - FAN-IN COMMUNICATION
 ////////////////////////////////////////////////////////////////////////////////
-TEST(link_socket, transfer_fanin_default){
-  const char *connectStrings[] = {
-    "socket_tx|default|127.0.0.1:8889", 
-    "socket_tx|default|127.0.0.1:8890", 
-    "socket_tx|default|127.0.0.1:8891", 
-  };
-  const char *bindString = "socket_rx|default|*:[8889-8891]";
-  link_common_fanin(connectStrings, bindString, 3);
-}
+std::vector<const char*> icomRxStr_fanin_default{
+  "socket_rx|default|*:[8889-8891]"
+};
+std::vector<const char*> icomTxStr_fanin_default{
+  "socket_tx|default|127.0.0.1:8889", 
+  "socket_tx|default|127.0.0.1:8890", 
+  "socket_tx|default|127.0.0.1:8891", 
+};
 
-TEST(link_socket, transfer_fanin_zero){
-  const char *connectStrings[] = {
-    "socket_tx|zero|127.0.0.1:8889", 
-    "socket_tx|zero|127.0.0.1:8890", 
-    "socket_tx|zero|127.0.0.1:8891", 
-  };
-  const char *bindString = "socket_rx|zero|*:[8889-8891]";
-  link_common_fanin(connectStrings, bindString, 3);
+std::vector<const char*> icomRxStr_fanin_zero{
+  "socket_rx|zero|*:[8889-8891]"
+};
+std::vector<const char*> icomTxStr_fanin_zero{
+  "socket_tx|zero|127.0.0.1:8889", 
+  "socket_tx|zero|127.0.0.1:8890", 
+  "socket_tx|zero|127.0.0.1:8891", 
+};
+
+
+TEST(link_socket, transfer_fanin_default_1x){
+  link_common_topology(icomRxStr_fanin_default, icomTxStr_fanin_default, 1);
+}
+TEST(link_socket, transfer_fanin_default_10000x){
+  link_common_topology(icomRxStr_fanin_default, icomTxStr_fanin_default, 10000);
+}
+TEST(link_socket, transfer_fanin_zero_1x){
+  link_common_topology(icomRxStr_fanin_default, icomTxStr_fanin_default, 1);
+}
+TEST(link_socket, transfer_fanin_zero_10000x){
+  link_common_topology(icomRxStr_fanin_default, icomTxStr_fanin_default, 10000);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // TEST-RELATED - COMPLEX
 ////////////////////////////////////////////////////////////////////////////////
-TEST(link_socket, transfer_complex){
-  const char *connectStrings[] = {
-    "socket_tx|default|127.0.0.1:8889",
-    "socket_tx|default|127.0.0.1:[8890-8891]",
-    "socket_tx|default|127.0.0.1:8892"};
-  const char *bindStrings[] = {
+std::vector<const char*> icomTxStr_complex_default{
+  "socket_tx|default|127.0.0.1:8889",
+  "socket_tx|default|127.0.0.1:[8890-8891]",
+  "socket_tx|default|127.0.0.1:8892",
+};
+std::vector<const char*> icomRxStr_complex_default{
     "socket_rx|default|*:[8889-8890]",
-    "socket_rx|default|*:[8891-8892]"};
-  link_common_complex(connectStrings, bindStrings);
+    "socket_rx|default|*:[8891-8892]",
+};
+
+
+TEST(link_socket, transfer_complex_1x){
+  link_common_topology(icomRxStr_complex_default, icomTxStr_complex_default, 1);
+}
+TEST(link_socket, transfer_complex_10000x){
+  link_common_topology(icomRxStr_complex_default, icomTxStr_complex_default, 10000);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

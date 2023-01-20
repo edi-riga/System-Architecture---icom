@@ -1,11 +1,14 @@
 #include <stdlib.h>
 #include <time.h>
 #include <pthread.h>
+#include <vector>
+#include <algorithm>
 #include "gtest/gtest.h"
 #include "link_common.h"
 
 extern "C" {
   #include "icom.h"
+  #include "string_parser.h"
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -15,16 +18,22 @@ typedef struct {
   icom_t    *icom;
   void      *buf;
   unsigned   bufSize;
+  unsigned   times;
 } thread_send_t;
 
+
 static void* thread_send(void *p){
+  icomStatus_t status;
   thread_send_t *pdata = (thread_send_t*)p;
-  return (void*)icom_send(pdata->icom, pdata->buf, pdata->bufSize);
+
+  for(int i=0; i<pdata->times; i++){
+    status = icom_send(pdata->icom, pdata->buf, pdata->bufSize);
+  }
+
+  return (void*)status;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// GENERIC TESTS - INITIALIZATION/DEINITIALIZATION
-////////////////////////////////////////////////////////////////////////////////
+
 void link_common_initialization(const char *icomStr, unsigned testCount){
   icom_t *icom;
   for(unsigned i=0; i<testCount; i++){
@@ -36,7 +45,7 @@ void link_common_initialization(const char *icomStr, unsigned testCount){
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// TEST-RELATED - SIMPLE TRANSFER
+// GENERIC-TEST - SIMPLE TRANSFER
 ////////////////////////////////////////////////////////////////////////////////
 void link_common_simple(const char *icomTxStr, const char *icomRxStr, uint32_t txBufSize){
   icom_t *icom_rx, *icom_tx;
@@ -60,7 +69,7 @@ void link_common_simple(const char *icomTxStr, const char *icomRxStr, uint32_t t
   }
 
   /* initiate send/receive processes */
-  thread_pdata = {icom_tx, txBuf, txBufSize};
+  thread_pdata = {icom_tx, txBuf, txBufSize, 1};
   pthread_create(&pid, NULL, thread_send, &thread_pdata);
   status = icom_recv(icom_rx, (void**)&rxBuf, &rxBufSize);
   EXPECT_EQ(status,    ICOM_SUCCESS);
@@ -77,7 +86,7 @@ void link_common_simple(const char *icomTxStr, const char *icomRxStr, uint32_t t
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// TEST-RELATED - VARIED TRANSFERS
+// GENERIC_TEST - VARIED TRANSFERS
 ////////////////////////////////////////////////////////////////////////////////
 void link_common_varied(const char *icomTxStr, const char *icomRxStr, unsigned testCount){
   icom_t *icom_rx, *icom_tx;
@@ -104,7 +113,7 @@ void link_common_varied(const char *icomTxStr, const char *icomRxStr, unsigned t
     }
 
     /* initiate send/receive processes */
-    thread_pdata = {icom_tx, txBuf, txBufSize};
+    thread_pdata = {icom_tx, txBuf, txBufSize, 1};
     pthread_create(&pid, NULL, thread_send, &thread_pdata);
     status = icom_recv(icom_rx, (void**)&rxBuf, &rxBufSize);
     pthread_join(pid, &ret);
@@ -124,141 +133,111 @@ void link_common_varied(const char *icomTxStr, const char *icomRxStr, unsigned t
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// TEST-RELATED - FANIN TRANSFERS
+// GENERIC_TEST - TOPOLOGY
 ////////////////////////////////////////////////////////////////////////////////
-#define TX_COUNT 16
-void link_common_fanin(const char *connectStrings[], const char *bindString, unsigned connectCount){
-  icom_t         *icomConnect[connectCount], *icomBind;
-  thread_send_t   thread_pdata[connectCount];
-  pthread_t       pid[connectCount];
-  uint8_t         txBuf[connectCount][TX_COUNT], *rxBuf;
-  icomStatus_t    status;
-  uint32_t        rxBufSize;
-  void           *ret;
-
-  /* initialize connect (sender) components */
-  for(int i=0; i<connectCount; i++){
-    icomConnect[i] = icom_init(connectStrings[i]);
-    EXPECT_FALSE(ICOM_IS_ERR(icomConnect[i]));
-  }
-
-  /* initialize bind (receiver) components */
-  icomBind = icom_init(bindString);
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind));
-
-  /* initialize connect (sender) data */
-  for(int i=0; i<connectCount; i++){
-  for(int j=0; j<TX_COUNT; j++){
-    txBuf[i][j] = rand() % 10 + i;
-  }}
-
-  /* initialize sender threads */
-  for(int i=0; i<connectCount; i++){
-    thread_pdata[i] = {icomConnect[i], txBuf[i], TX_COUNT};
-    pthread_create(&pid[i], NULL, thread_send, &thread_pdata[i]);
-  }
-
-  /* receive all buffers */
-  status = icom_recv(icomBind);
-  EXPECT_EQ(status, ICOM_SUCCESS);
-
-  /* request buffers one-by-one */
-  rxBuf = NULL;
-  for(int i=0; i<connectCount; i++){
-    icom_nextBuffer(icomBind, (void**)&rxBuf, &rxBufSize);
-    EXPECT_EQ(rxBufSize, TX_COUNT);
-    EXPECT_EQ(memcmp(rxBuf, txBuf[i], TX_COUNT), 0);
-  }
-
-  /* join sender threads */
-  for(int i=0; i<connectCount; i++){
-    pthread_join(pid[i], &ret);
-    EXPECT_TRUE((uint64_t)ret == ICOM_SUCCESS);
-  }
-
-  /* deinitialize connect (sender) objects */
-  for(int i=0; i<connectCount; i++){
-    icom_deinit(icomConnect[i]);
-  }
-
-  /* deinitialize bind (receiver) object */
-  icom_deinit(icomBind);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// TEST-RELATED - COMPLEX
-////////////////////////////////////////////////////////////////////////////////
-void link_common_complex(
-const char *connectStrings[], // must have 3 strings
-const char *bindStrings[]     // must have 2 strings
-)
-{
-  icom_t *icomBind[2], *icomConnect[3];
-  thread_send_t thread_pdata[3];
-  const char *txBuf0 = "buffer0";
-  const char *txBuf1 = "buffer1";
-  const char *txBuf2 = "buffer2";
-  uint32_t txBufSize[] = {sizeof(txBuf0), sizeof(txBuf1), sizeof(txBuf2)};
-  char *rxBuf; uint32_t rxBufSize;
+void link_common_topology(std::vector<const char*> icomRxStr, std::vector<const char*> icomTxStr, uint32_t transfers){
+  std::vector<icom_t*> icom_rx;
+  std::vector<icom_t*> icom_tx;
+  std::vector<thread_send_t*> icom_tx_pdata;
+  std::vector<pthread_t> icom_tx_pids;
+  std::vector<const char*> tx_bufs;
+  std::vector<const char*> rx_bufs;
+  unsigned bytes_sent = 0, bytes_received = 0;
   icomStatus_t status;
-  pthread_t pid[3];
-  void *ret;
 
-  icomConnect[0] = icom_init(connectStrings[0]);
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect[0]));
-  icomConnect[1] = icom_init(connectStrings[1]);
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect[1]));
-  icomConnect[2] = icom_init(connectStrings[2]);
-  EXPECT_FALSE(ICOM_IS_ERR(icomConnect[2]));
-  icomBind[0] = icom_init(bindStrings[0]);
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind[0]));
-  icomBind[1] = icom_init(bindStrings[1]);
-  EXPECT_FALSE(ICOM_IS_ERR(icomBind[1]));
+  for(auto &str : icomRxStr){
+    icom_rx.push_back(icom_init(str));
+    EXPECT_FALSE(ICOM_IS_ERR(icom_rx.back()));
+  }
 
-  thread_pdata[0] = {icomConnect[0], (char*)txBuf0, txBufSize[0]};
-  pthread_create(&pid[0], NULL, thread_send, &thread_pdata[0]);
-  thread_pdata[1] = {icomConnect[1], (char*)txBuf1, txBufSize[1]};
-  pthread_create(&pid[1], NULL, thread_send, &thread_pdata[1]);
-  thread_pdata[2] = {icomConnect[2], (char*)txBuf2, txBufSize[2]};
-  pthread_create(&pid[2], NULL, thread_send, &thread_pdata[2]);
+  for(auto &str : icomTxStr){
+    pthread_t pid;
+    icom_tx.push_back(icom_init(str));
+    EXPECT_FALSE(ICOM_IS_ERR(icom_tx.back()));
 
-  status = icom_recv(icomBind[0], (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status, ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize[0]);
-  EXPECT_TRUE( (memcmp(rxBuf, txBuf0, txBufSize[0]) == 0)
-            || (memcmp(rxBuf, txBuf1, txBufSize[1]) == 0));
+    unsigned connections = parser_getConnectionCount(str);
+    for(unsigned i=0; i<connections; i++){
+      tx_bufs.push_back(str);  // no need to duplicate, because resides in icomRxStr
+      bytes_sent += strlen(str)+1;
+    }
 
-  icom_nextBuffer(icomBind[0], (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status, ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize[1]);
-  EXPECT_TRUE( (memcmp(rxBuf, txBuf0, txBufSize[0]) == 0)
-            || (memcmp(rxBuf, txBuf1, txBufSize[1]) == 0));
+    thread_send_t *thread_pdata = new thread_send_t;
+    *thread_pdata = {icom_tx.back(), (char*)str, (uint32_t)strlen(str)+1, transfers};
+    icom_tx_pdata.push_back(thread_pdata);
 
-  status = icom_recv(icomBind[1], (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status, ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize[1]);
-  EXPECT_TRUE( (memcmp(rxBuf, txBuf1, txBufSize[1]) == 0)
-            || (memcmp(rxBuf, txBuf2, txBufSize[2]) == 0));
+    pthread_create(&pid, NULL, thread_send, icom_tx_pdata.back());
+    icom_tx_pids.push_back(pid);
+  }
 
-  icom_nextBuffer(icomBind[1], (void**)&rxBuf, &rxBufSize);
-  EXPECT_EQ(status, ICOM_SUCCESS);
-  EXPECT_EQ(rxBufSize, txBufSize[2]);
-  EXPECT_TRUE( (memcmp(rxBuf, txBuf1, txBufSize[1]) == 0)
-            || (memcmp(rxBuf, txBuf2, txBufSize[2]) == 0));
 
-  pthread_join(pid[0], &ret);
-  EXPECT_EQ((icomStatus_t)(uint64_t)ret, ICOM_SUCCESS);
-  pthread_join(pid[1], &ret);
-  EXPECT_EQ((icomStatus_t)(uint64_t)ret, ICOM_SUCCESS);
-  pthread_join(pid[2], &ret);
-  EXPECT_EQ((icomStatus_t)(uint64_t)ret, ICOM_SUCCESS);
+  for(auto &icom : icom_rx){
+    void *buf = NULL;
+    unsigned size;
 
-  icom_deinit(icomConnect[0]);
-  icom_deinit(icomConnect[1]);
-  icom_deinit(icomConnect[2]);
-  icom_deinit(icomBind[0]);
-  icom_deinit(icomBind[1]);
+    status = icom_recv(icom);
+    EXPECT_EQ(status, ICOM_SUCCESS);
+    
+    while(icom_nextBuffer(icom, &buf, &size)){
+      bytes_received += size;
+      rx_bufs.push_back(strdup((char*)buf));  // string must be duplicated, buffer may change
+    }
+  }
+
+  /* sort buffers */
+  std::sort(tx_bufs.begin(), tx_bufs.end(),
+    [](const char *l, const char *r){
+      return (strcmp(l,r) > 0);});
+  std::sort(rx_bufs.begin(), rx_bufs.end(),
+    [](const char *l, const char *r){
+      return (strcmp(l,r) > 0);});
+
+  #if 0
+  std::cout << "Tx buffers:" << std::endl;
+  for(auto &buf : tx_bufs){
+    std::cout << buf << std::endl;
+  }
+  std::cout << "Rx buffers:" << std::endl;
+  for(auto &buf : rx_bufs){
+    std::cout << buf << std::endl;
+  }
+  #endif
+
+  /* compare sent/received number of bytes */
+  EXPECT_EQ(bytes_sent, bytes_received);
+
+  /* compare sent/received data */
+  EXPECT_TRUE(
+    std::equal(tx_bufs.begin(), tx_bufs.end(), rx_bufs.begin(),
+      [](const char *l, const char *r) {
+        return (strcmp(l,r) == 0);}));
+
+  /* release allocated memory */
+  for(auto &buf : rx_bufs){
+    free((void*)buf);
+  }
+
+  for(auto &pid : icom_tx_pids){
+    void *ret;
+    pthread_join(pid, &ret);
+    EXPECT_EQ((icomStatus_t)(uint64_t)ret, ICOM_SUCCESS);
+  }
+
+  while(!icom_tx_pdata.empty()){
+    delete icom_tx_pdata.back();
+    icom_tx_pdata.pop_back();
+  }
+
+  while(!icom_rx.empty()){
+    icom_deinit(icom_rx.back());
+    icom_rx.pop_back();
+  }
+
+  while(!icom_tx.empty()){
+    icom_deinit(icom_tx.back());
+    icom_tx.pop_back();
+  }
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // TEST-RELATED - TIMEOUT
