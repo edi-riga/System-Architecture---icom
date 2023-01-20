@@ -13,7 +13,7 @@ static inline char* strchrnul(const char *ptr, char delimiter){
 }
 #endif
 
-unsigned parser_getCount(const char *ptrStart){
+unsigned parser_getConnectionCount(const char *ptrStart){
   char *ptrStop;
   int   strCount = 0;
   int   idFrom, idTo, ret;
@@ -50,7 +50,7 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
   }
 
   // allocate memories
-  *strCount = parser_getCount(ptrStart);
+  *strCount = parser_getConnectionCount(ptrStart);
   *strArray = (char**)malloc((*strCount)*sizeof(char*));
   if(*strArray == NULL){
     _E("Failed to allocate memory");

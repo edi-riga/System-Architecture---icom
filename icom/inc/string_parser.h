@@ -48,4 +48,11 @@ int parser_initFields(char ***fieldArray, uint32_t *fieldCount, const char *ptrS
  */
 void parser_deinitFields(char **fieldArray, uint32_t fieldCount);
 
+
+/*@ Get number of detected connections in the icom strings.
+ *
+ *  @param ptrStart   [in]  the input C-string, which shall be parsed
+ */
+unsigned parser_getConnectionCount(const char *ptrStart);
+
 #endif
