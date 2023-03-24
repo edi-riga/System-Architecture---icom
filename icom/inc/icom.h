@@ -50,6 +50,10 @@ typedef struct icomLink {
   icomStatus_t (*sendHandler)(icomLink_t *link, void *buf, unsigned bufSize);
   icomStatus_t (*sendHandlerSecondary)(icomLink_t *link, void *buf, unsigned bufSize);
   icomStatus_t (*recvHandler)(icomLink_t *link, void **buf, unsigned *bufSize);
+  icomStatus_t (*notifySendHandler)(icomLink_t *link, void **buf, unsigned *bufSize);
+  icomStatus_t (*notifyRecvHandler)(icomLink_t *link, void **buf, unsigned *bufSize);
+  icomStatus_t (*autoSendAck)(icomLink_t *link, void **buf, unsigned *bufSize);
+  icomStatus_t (*autoRecvAck)(icomLink_t *link, void **buf, unsigned *bufSize);
 } icomLink_t;
 
 
@@ -83,6 +87,8 @@ icomStatus_t icom_send(icom_t *icom, void  *buf, unsigned bufSize);
 icomStatus_t icom_recv1(icom_t *icom);
 icomStatus_t icom_recv2(icom_t *icom, void **buf);
 icomStatus_t icom_recv3(icom_t *icom, void **buf, unsigned *bufSize);
+icomStatus_t icom_notify_send(icom_t *icom);
+icomStatus_t icom_notify_recv(icom_t *icom);
 
 #define icom_recv(...) \
   CONCATENATE(icom_recv,ARGUMENT_COUNT(__VA_ARGS__)(__VA_ARGS__))

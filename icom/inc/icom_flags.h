@@ -10,7 +10,9 @@ typedef uint32_t icomFlags_t;
 #define ICOM_FLAG_ZERO       (1<<0)
 #define ICOM_FLAG_PROT       (1<<1)
 #define ICOM_FLAG_TIMEOUT    (1<<2)
-#define ICOM_FLAG_MAX_VALID  ICOM_FLAG_TIMEOUT
+#define ICOM_FLAG_NOTIFY     (1<<3)
+#define ICOM_FLAG_AUTONOTIFY (1<<4)
+#define ICOM_FLAG_MAX_VALID  ICOM_FLAG_AUTONOTIFY
 #define ICOM_FLAG_ZERO_PROT  ((1<<0)+(1<<1))
 #define ICOM_FLAG_INVALID    (1<<31)
 
