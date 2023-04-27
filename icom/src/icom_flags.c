@@ -3,9 +3,11 @@
 #include "notification.h"
 
 static const char* icomFlagStrings[] = {
-  "zero",      // ICOM_FLAG_ZERO
-  "prot",      // ICOM_FLAG_PROT
-  "timeout",   // ICOM_FLAG_TIMEOUT
+  "zero",       // ICOM_FLAG_ZERO
+  "prot",       // ICOM_FLAG_PROT
+  "timeout",    // ICOM_FLAG_TIMEOUT
+  "notify",     // ICOM_FLAG_NOTIFY
+  "autonotify", // ICOM_FLAG_AUTONOTIFY
 //  "prot,zero", // ICOM_FLAG_ZERO | ICOM_FLAG_PROT TODO: create solution for combining flags
 };
 

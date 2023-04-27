@@ -219,44 +219,20 @@ icomStatus_t icom_send(icom_t *icom, void  *buf, unsigned bufSize){
   return status[0];
 }
 
-icomStatus_t icom_recv1(icom_t *icom){ //, void **buf, unsigned *bufSize){
+inline icomStatus_t icom_recv1(icom_t *icom){ //, void **buf, unsigned *bufSize){
   icomStatus_t status[icom->comCount];
   void *dummyBuf;
   uint32_t dummySize;
 
-  /* Perform all the data receptions in reverse order. The order is reveresed
-   * so that the first buffer in the recvBuf list is returned and, therefore,
-   * the icom_nextBuffer routine indeed would return the next buffer. */
-  for(int i=icom->comCount-1; i>=0; i--){
-    status[i] = icom->comConnections[i].recvHandler(
-      icom->comConnections+i,
-      &dummyBuf,
-      &dummySize);
-  }
-
-  /* TODO: analyze return values */
-
-  return status[0];
+  return icom_recv3(icom, &dummyBuf, &dummySize);
 }
 
 
-icomStatus_t icom_recv2(icom_t *icom, void **buf){
+inline icomStatus_t icom_recv2(icom_t *icom, void **buf){
   icomStatus_t status[icom->comCount];
   uint32_t dummySize;
 
-  /* Perform all the data receptions in reverse order. The order is reveresed
-   * so that the first buffer in the recvBuf list is returned and, therefore,
-   * the icom_nextBuffer routine indeed would return the next buffer. */
-  for(int i=icom->comCount-1; i>=0; i--){
-    status[i] = icom->comConnections[i].recvHandler(
-      icom->comConnections+i,
-      buf,
-      &dummySize);
-  }
-
-  /* TODO: analyze return values */
-
-  return status[0];
+  return icom_recv3(icom, buf, &dummySize);
 }
 
 
@@ -278,6 +254,35 @@ icomStatus_t icom_recv3(icom_t *icom, void **buf, unsigned *bufSize){
   return status[0];
 }
 
+icomStatus_t icom_notify_send(icom_t *icom){
+  icomStatus_t status[icom->comCount];
+
+  for(int i=icom->comCount-1; i>=0; i--){
+    status[i] = icom->comConnections[i].notifySendHandler(
+      icom->comConnections+i,
+      (void **)NULL,
+      (unsigned *)NULL);
+  }
+
+  /* TODO: analyze return values */
+
+  return status[0];
+}
+
+icomStatus_t icom_notify_recv(icom_t *icom){
+  icomStatus_t status[icom->comCount];
+
+  for(int i=icom->comCount-1; i>=0; i--){
+    status[i] = icom->comConnections[i].notifyRecvHandler(
+      icom->comConnections+i,
+      (void **)NULL,
+      (unsigned *)NULL);
+  }
+
+  /* TODO: analyze return values */
+
+  return status[0];
+}
 
 void* icom_nextBuffer(icom_t *icom, void **buf, unsigned *bufSize){
   icomLink_t *link;

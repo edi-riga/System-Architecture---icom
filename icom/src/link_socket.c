@@ -14,85 +14,35 @@
 #include "config.h"
 
 
-static icomStatus_t link_sendHeader(icomLinkSocket_t *pdata, icomMsgHeader_t *header){
-  if(send(pdata->fd, header, sizeof(*header), 0) == -1){
-    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-      _D("Send timeout");
-      return ICOM_TIMEOUT;
-    }
-
-    _SE("Send failed (header)");
-    return ICOM_ERROR;
-  }
-
+static icomStatus_t link_nop(icomLink_t *link, void **buf, unsigned *bufSize) {
   return ICOM_SUCCESS;
 }
 
+static icomStatus_t link_error(icomLink_t *link, void **buf, unsigned *bufSize) {
+  return ICOM_ERROR;
+}
 
-static icomStatus_t link_sendData(icomLinkSocket_t *pdata, void *buf, unsigned bufSize){
-  int ret;
-  _D("Sending data from %p (%u bytes)", buf, bufSize);
-
-  /* Send data */
-  ret = send(pdata->fd, buf, bufSize, 0);
-  if(ret == -1){
-    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-      _D("Send timeout");
-      return ICOM_TIMEOUT;
+static icomStatus_t link_accept(icomLink_t *link, void **buf, unsigned *bufSize) {
+  /* Retreive private data structure */
+  icomLinkSocket_t *pdata = link->pdata;
+  
+  /* Connect to the */
+  if (!pdata->fdAccepted) {  // TEMP
+    pdata->fdAccepted = accept(pdata->fd, NULL, NULL);
+    if (pdata->fdAccepted == -1) {
+      _SE("Failed to accept socket");
+      pdata->fdAccepted = 0;
+      if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+        _D("Timeout");
+        return ICOM_TIMEOUT;
+      }
+      return ICOM_ERROR;
     }
-
-    _SE("Send failed (data)");
-    return ICOM_ERROR;
   }
-
-  /* Check if size of requested and sent data is equal */
-  if(ret != bufSize){
-    return ICOM_PARTIAL;
-  }
-
   return ICOM_SUCCESS;
 }
 
-
-static icomStatus_t link_sendDefault(icomLink_t *link, void *buf, unsigned bufSize){
-  icomMsgHeader_t header;
-  icomStatus_t status;
-  _D("Sending (Default handler)");
-
-  /* Retreive private data structure */
-  icomLinkSocket_t *pdata = link->pdata;
-
-  /* Construct and send header */
-  header = (icomMsgHeader_t){ICOM_TYPE_SOCKET_TX, link->flags, bufSize};
-  if( (status = link_sendHeader(pdata, &header)) != ICOM_SUCCESS){
-    return status;
-  }
-
-  /* Send data */
-  return link_sendData(pdata, buf, bufSize);
-}
-
-
-static icomStatus_t link_sendZero(icomLink_t *link, void *buf, unsigned bufSize){
-  icomMsgHeader_t header;
-  icomStatus_t status;
-  _D("Sending (Zero handler)");
-
-  /* Retreive private data structure */
-  icomLinkSocket_t *pdata = link->pdata;
-
-  /* Construct and send header */
-  header = (icomMsgHeader_t){ICOM_TYPE_SOCKET_TX, link->flags, bufSize};
-  if((status = link_sendHeader(pdata, &header)) != ICOM_SUCCESS){
-    return status;
-  }
-
-  /* Send data */
-  return link_sendData(pdata, &buf, sizeof(void*));
-}
-
-
-static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
+static icomStatus_t link_recvHeader(icomLink_t *link, void **buf, unsigned *bufSize) {
   icomMsgHeader_t header;
   int bytesReceived;
   int ret;
@@ -104,10 +54,10 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
 
   /* Receive header */
   bytesReceived = 0;
-  do{
+  do {
     ret = recv(pdata->fdAccepted, (uint8_t*)&header+bytesReceived, sizeof(header)-bytesReceived, 0);
-    if(ret == -1){
-      if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+    if (ret == -1) {
+      if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
         _D("Timeout");
         return ICOM_TIMEOUT;
       }
@@ -117,25 +67,33 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
     }
 
     bytesReceived += ret;
-  } while( (ret != -1) && (bytesReceived < sizeof(header)));
+  } while ((ret != -1) && (bytesReceived < sizeof(header)));
 
   _D("Link @%p in header buffer @%p  received %u bytes", link, &header, ret);
   _D("Header type: %u; flags: %u; bufSize: %u", header.type, header.flags, header.bufSize);
 
   /* Reallocate input buffer */
-  if(link->recvBufSize != header.bufSize){
-    link->recvBufSize = header.bufSize;
-    link->recvSize    = (header.flags & ICOM_FLAG_ZERO) ? sizeof(void*) : header.bufSize;
-    link->recvBuf     = (void*)realloc(link->recvBuf-sizeof(link), sizeof(link) + link->recvBufSize);
+  if (link->recvBufSize != header.bufSize) {
+    link->recvBufSize =  header.bufSize;
+    link->recvSize    =  (header.flags & ICOM_FLAG_ZERO) ? sizeof(void*) : header.bufSize;
+    link->recvBuf     =  (void*)realloc(link->recvBuf-sizeof(link), sizeof(link) + link->recvBufSize);
     link->recvBuf     += sizeof(link);
+    link->flags       =  header.flags;
   }
+  return ICOM_SUCCESS;
+}
 
-  /* Receive the actual data (which can be split into multiple messages) */
-  bytesReceived = 0;
-  do{
+static icomStatus_t link_recvData(icomLink_t *link, void **buf, unsigned *bufSize) {
+  int bytesReceived = 0;
+  int ret;
+
+  /* Retreive private data structure */
+  icomLinkSocket_t *pdata = link->pdata;
+
+  do {
     ret = recv(pdata->fdAccepted, (uint8_t*)(link->recvBuf)+bytesReceived, link->recvSize-bytesReceived, 0);
     if(ret == -1){
-      if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+      if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
         _D("Timeout");
         return ICOM_TIMEOUT;
       }
@@ -145,14 +103,14 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
     }
 
     bytesReceived += ret;
-  } while( (ret != -1) && (bytesReceived < link->recvSize));
+  } while ((ret != -1) && (bytesReceived < link->recvSize));
 
   /* Setup output arguments */
-  *buf     = (header.flags & ICOM_FLAG_ZERO) ? *(void**)link->recvBuf : link->recvBuf;
-  *bufSize = (header.flags & ICOM_FLAG_ZERO) ? header.bufSize         : bytesReceived;
+  *buf     = (link->flags & ICOM_FLAG_ZERO) ? *(void**)link->recvBuf : link->recvBuf;
+  *bufSize = (link->flags & ICOM_FLAG_ZERO) ? link->recvBufSize      : bytesReceived;
 
   /* Check if size of requested and sent data is equal */
-  if( !(header.flags & ICOM_FLAG_ZERO) && bytesReceived != link->recvBufSize){
+  if (!(link->flags & ICOM_FLAG_ZERO) && bytesReceived != link->recvBufSize) {
     _W("Received partial data (%d bytes / %d bytes)", bytesReceived, link->recvBufSize);
     return ICOM_PARTIAL;
   }
@@ -162,163 +120,165 @@ static icomStatus_t link_recv(icomLink_t *link, void **buf,  unsigned *bufSize){
   return ICOM_SUCCESS;
 }
 
-
-static icomStatus_t link_connectAndSend(icomLink_t *link, void *buf, unsigned bufSize){
-
-  /* Retreive private data structure */
-  icomLinkSocket_t *pdata = link->pdata;
-
-  _D();
-
-  /* Connect to the */
-  if(connect(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1){
-    _SE("Failed to connect socket");
-    if(errno == ECONNREFUSED){
-      return ICOM_ECONNREFUSED;
-    } else {
-      return ICOM_ERROR;
-    }
-  }
-
-  /* Assuming we are connected, switch future handler to a connected one */
-  link->sendHandler = link->sendHandlerSecondary;
-
-  /* Call send handler */
-  return link->sendHandler(link, buf, bufSize);
-}
-
-static icomStatus_t link_acceptAndRecv(icomLink_t *link, void **buf, unsigned *bufSize){
+static icomStatus_t link_sendHeader(icomLink_t *link, void **buf, unsigned *bufSize) {
+  icomMsgHeader_t header = (icomMsgHeader_t){link->type, link->flags, *bufSize};
 
   /* Retreive private data structure */
   icomLinkSocket_t *pdata = link->pdata;
 
-  _D();
-
-  /* Connect to the */
-  pdata->fdAccepted = accept(pdata->fd, NULL, NULL);
-  if(pdata->fdAccepted == -1){
-    _SE("Failed to accept socket");
-    return ICOM_ERROR;
-  }
-
-  /* Assuming we have an accepted socket, switch future handler to just recv */
-  link->recvHandler = link_recv;
-
-  /* Call send handler */
-  return link->recvHandler(link, buf, bufSize);
-}
-
-static icomStatus_t link_sendOnAccepted(icomLink_t *link, void *buf, unsigned bufSize){
-  icomMsgHeader_t header;
-  int ret;
-
-  /* Retreive private data structure */
-  icomLinkSocket_t *pdata = link->pdata;
-
-  /* Send header (TODO: refactor) */
-  header = (icomMsgHeader_t){ICOM_TYPE_SOCKET_RX, link->flags, bufSize};
-  ret = send(pdata->fdAccepted, &header, sizeof(header), 0);
-  if(ret == -1){
-    _SE("Send failed (data)");
-    return ICOM_ERROR;
-  }
-
-  /* Send data (TODO: refactor) */
-  ret = send(pdata->fdAccepted, buf, bufSize, 0);
-  if(ret == -1){
-    _SE("Send failed (data)");
-    return ICOM_ERROR;
-  }
-
-  return ICOM_SUCCESS;
-}
-
-static icomStatus_t link_acceptAndSend(icomLink_t *link, void *buf, unsigned bufSize){
-  /* Retreive private data structure */
-  icomLinkSocket_t *pdata = link->pdata;
-
-  /* This is receiving end, therefore we might not have a valid socket */
-  if(!pdata->fdAccepted){
-    pdata->fdAccepted = accept(pdata->fd, NULL, NULL);
-    if(pdata->fdAccepted == -1){
-      _SE("Failed to accept socket");
-      return ICOM_ERROR;
-    }
-  }
-
-  /* Assuming we have accepted the socket */
-  link->sendHandler = link_sendOnAccepted;
-
-  return link_sendOnAccepted(link, buf, bufSize);
-}
-
-static icomStatus_t link_recvOnConnected(icomLink_t *link, void **buf, unsigned *bufSize){
-  int ret;
-  int bytesReceived = 0;
-  icomMsgHeader_t header;
-
-  /* Retreive private data structure */
-  icomLinkSocket_t *pdata = link->pdata;
-
-  /* Receive header */
-  ret = recv(pdata->fd, &header, sizeof(header), 0);
-  if(ret == -1){
-    if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-      _D("Timeout");
+  if (send(pdata->fdAccepted, &header, sizeof(header), 0) == -1) {
+    if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+      _D("Send timeout");
       return ICOM_TIMEOUT;
     }
-
     _SE("Send failed (header)");
     return ICOM_ERROR;
   }
 
-  /* Reallocate input buffer */
-  if(link->recvBufSize != header.bufSize){
-    link->recvBufSize = header.bufSize;
-    link->recvSize    = (header.flags & ICOM_FLAG_ZERO) ? sizeof(void*) : header.bufSize;
-    link->recvBuf     = (void*)realloc(link->recvBuf-sizeof(link), sizeof(link) + link->recvBufSize);
-    link->recvBuf     += sizeof(link);
+  return ICOM_SUCCESS;
+}
+
+static icomStatus_t link_sendData(icomLink_t *link, void **buf, unsigned *bufSize){
+  int ret;
+  unsigned sendSize;
+
+  /* Retreive private data structure */
+  icomLinkSocket_t *pdata = link->pdata;
+
+  _D("Sending data from %p (%u bytes)", *buf, *bufSize);
+
+  /* Send data */
+  if (link->flags & ICOM_FLAG_ZERO) {
+    ret = send(pdata->fdAccepted, buf, sizeof(void *), 0);
+    sendSize = sizeof(void *);
+  } else {
+    ret = send(pdata->fdAccepted, *buf, *bufSize, 0);
+    sendSize = *bufSize;
   }
-
-  /* Receive the actual data (which can be split into multiple messages) */
-  do{
-    ret = recv(pdata->fd, (uint8_t*)(link->recvBuf)+bytesReceived, link->recvSize-bytesReceived, 0);
-    if(ret == -1){
-      if((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-        _D("Timeout");
-        return ICOM_TIMEOUT;
-      }
-
-      _SE("Receive failed (header)");
-      return ICOM_ERROR;
+  if (ret == -1) {
+    if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+      _D("Send timeout");
+      return ICOM_TIMEOUT;
     }
 
-    bytesReceived += ret;
-  } while( (ret != -1) && (bytesReceived != link->recvSize));
-
-  /* Setup output arguments */
-  *buf     = (header.flags & ICOM_FLAG_ZERO) ? *(void**)link->recvBuf : link->recvBuf;
-  *bufSize = (header.flags & ICOM_FLAG_ZERO) ? header.bufSize         : bytesReceived;
-
-  /* Check if size of requested and sent data is equal */
-  if( !(header.flags & ICOM_FLAG_ZERO) && bytesReceived != link->recvBufSize){
-    _W("Received partial data (%d bytes / %d bytes)", bytesReceived, link->recvBufSize);
-    return ICOM_PARTIAL;
+    _SE("Send failed (data)");
+    return ICOM_ERROR;
   }
 
-  _D("Link @%p in buffer @%p  received %u bytes", link, link->recvBuf, *bufSize);
+  /* Check if size of requested and sent data is equal */
+  if (ret != sendSize) {
+    return ICOM_PARTIAL;
+  }
 
   return ICOM_SUCCESS;
 }
 
-static icomStatus_t link_sendNotImplemented(icomLink_t *link, void *buf, unsigned bufSize){
-  return ICOM_NIMPL;
+static icomStatus_t link_connect(icomLink_t *link, void **buf, unsigned *bufSize){
+  /* Retreive private data structure */
+  icomLinkSocket_t *pdata = link->pdata;
+
+  _D();
+
+  /* Connect to the */
+  if (!pdata->fdAccepted) {
+    if (connect(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1) {
+      _SE("Failed to connect socket");
+      if (errno == ECONNREFUSED) {
+        return ICOM_ECONNREFUSED;
+      } else {
+        return ICOM_ERROR;
+      }
+    }
+    pdata->fdAccepted = pdata->fd;
+  }
+
+  return ICOM_SUCCESS;
 }
 
-static icomStatus_t link_recvNotImplemented(icomLink_t *link, void **buf, unsigned *bufSize){
-  return ICOM_NIMPL;
+static icomStatus_t link_sendAck(icomLink_t *link, void **buf, unsigned *bufSize){
+  int ack = 1;
+
+  /* Retreive private data structure */
+  icomLinkSocket_t *pdata = link->pdata;
+
+  if (send(pdata->fdAccepted, &ack, sizeof(ack), 0) == -1) {
+    if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+      _D("Send timeout");
+      return ICOM_TIMEOUT;
+    }
+    _SE("Send failed (ack)");
+    return ICOM_ERROR;
+  }
+
+  return ICOM_SUCCESS;
 }
 
+static icomStatus_t link_recvAck(icomLink_t *link, void **buf, unsigned *bufSize) {
+  int ack;
+  int bytesReceived;
+  int ret;
+
+  _D("Receiving at link: %p", link);
+
+  /* Retreive private data structure */
+  icomLinkSocket_t *pdata = link->pdata;
+
+  /* Receive */
+  bytesReceived = 0;
+  do {
+    ret = recv(pdata->fdAccepted, (uint8_t*)&ack+bytesReceived, sizeof(ack)-bytesReceived, 0);
+    if (ret == -1) {
+      if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+        _D("Timeout");
+        return ICOM_TIMEOUT;
+      }
+      _SE("Receive failed (ack)");
+      return ICOM_ERROR;
+    }
+    bytesReceived += ret;
+  } while ((ret != -1) && (bytesReceived < sizeof(ack)));
+
+  if (ack != 1) {
+    return ICOM_ERROR;
+  }
+  return ICOM_SUCCESS;
+}
+
+static icomStatus_t link_sendHandler(icomLink_t *link, void *buf, unsigned bufSize){
+  icomStatus_t ret;
+  ret = link_connect(link, &buf, &bufSize);
+  if (ret != ICOM_SUCCESS) return ret;
+  ret = link_sendHeader(link, &buf, &bufSize);
+  if (ret != ICOM_SUCCESS) return ret;
+  ret = link_sendData(link, &buf, &bufSize);
+  if (ret != ICOM_SUCCESS) return ret;
+  ret = link->autoRecvAck(link, buf, &bufSize);
+  if (ret != ICOM_SUCCESS) return ret;
+  return ICOM_SUCCESS;
+}
+
+static icomStatus_t link_recvHandler(icomLink_t *link, void **buf, unsigned *bufSize){
+  icomStatus_t ret;
+  ret = link_accept(link, buf, bufSize);
+  if (ret != ICOM_SUCCESS) return ret;
+  ret = link->autoSendAck(link, buf, bufSize);
+  if (ret != ICOM_SUCCESS) return ret;
+  ret = link_recvHeader(link, buf, bufSize);
+  if (ret != ICOM_SUCCESS) return ret;
+  ret = link_recvData(link, buf, bufSize);
+  if (ret != ICOM_SUCCESS) return ret;
+  return ICOM_SUCCESS;
+}
+
+static icomStatus_t link_autoSendAck(icomLink_t *link, void **buf, unsigned *bufSize){
+  link->autoSendAck = link_sendAck;
+  return ICOM_SUCCESS;
+}
+
+static icomStatus_t link_autoRecvAck(icomLink_t *link, void **buf, unsigned *bufSize){
+  link->autoRecvAck = link_recvAck;
+  return link_recvAck(link, buf, bufSize);
+}
 
 icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const char *comString, icomFlags_t flags){
   icomStatus_t ret;
@@ -380,24 +340,31 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
       _SW("Failed to set socket timeout option");
     }
   }
-
-  /* attempt connectn */
-  if(connect(pdata->fd, (struct sockaddr*)&pdata->sockaddr, sizeof(struct sockaddr_in)) == -1){
-    if(errno == ECONNREFUSED){
-      //_SW("Failed to connect socket (Receiver is not yet running)");
-      not_connected = 1;
-    } else {
-      _SE("Failed to connect socket");
-      ret = (icomStatus_t)ICOM_ELINK;
-      goto failure_connect;
-    }
+  
+  /* set up handlers */
+  link->sendHandler = link_sendHandler;
+  link->recvHandler = link_error;
+  link->autoSendAck = link_nop;
+  link->autoRecvAck = link_nop;
+  link->notifySendHandler = link_nop;
+  link->notifyRecvHandler = link_nop;
+  if (flags & ICOM_FLAG_AUTONOTIFY) {
+    link->autoRecvAck = link_autoRecvAck;
+    link->notifySendHandler = link_error;
+  } else if (flags & ICOM_FLAG_NOTIFY) {
+    link->notifyRecvHandler = link_recvAck;
+    link->notifySendHandler = link_error;
+  } else { 
+    link->recvHandler = link_recvHandler;
   }
 
-  /* set up handlers */
-  link->sendHandlerSecondary = (flags & ICOM_FLAG_ZERO) ? (link_sendZero) : (link_sendDefault);
-  link->sendHandler = (not_connected) ? (link_connectAndSend) : (link->sendHandlerSecondary);
-  //link->recvHandler = link_recvNotImplemented;
-  link->recvHandler = link_recvOnConnected;
+  if (flags & ICOM_FLAG_ZERO) {
+    printf("zero\n");
+  } else {
+    printf("not zero\n");
+  }
+
+  pdata->fdAccepted = 0;
 
   pdata->ip   = strdup(ip);
   pdata->port = port;
@@ -507,9 +474,21 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
   };
 
   /* set up handlers */
-  //link->sendHandler = link_sendNotImplemented;
-  link->sendHandler = link_acceptAndSend;
-  link->recvHandler = link_acceptAndRecv;
+  link->recvHandler = link_recvHandler;
+  link->sendHandler = link_error;
+  link->autoSendAck = link_nop;
+  link->autoRecvAck = link_nop;
+  link->notifySendHandler = link_nop;
+  link->notifyRecvHandler = link_nop;
+  if (flags & ICOM_FLAG_AUTONOTIFY) {
+    link->autoSendAck = link_autoSendAck;
+    link->notifyRecvHandler = link_error;
+  } else if (flags & ICOM_FLAG_NOTIFY) {
+    link->notifySendHandler = link_sendAck;
+    link->notifyRecvHandler = link_error;
+  } else {
+    link->sendHandler = link_sendHandler;
+  }
 
   pdata->ip         = strdup(ip);
   pdata->port       = port;
@@ -540,7 +519,7 @@ void icom_deinitSocket(icomLink_t* link){
   /* retreive private data structure */
   icomLinkSocket_t *pdata = (icomLinkSocket_t*)(link->pdata);
 
-  if(link->type == ICOM_TYPE_SOCKET_RX && pdata->fdAccepted){
+  if (link->type == ICOM_TYPE_SOCKET_RX && pdata->fdAccepted) {
     shutdown(pdata->fdAccepted, SHUT_RDWR);
     close(pdata->fdAccepted);
   }
@@ -548,9 +527,10 @@ void icom_deinitSocket(icomLink_t* link){
   close(pdata->fd);
   free(pdata->ip);
 
-  if(link->type == ICOM_TYPE_SOCKET_RX && link->recvBuf){
+  if (link->type == ICOM_TYPE_SOCKET_RX && link->recvBuf) {
     free(link->recvBuf-sizeof(link));
   }
 
   free(link->pdata);
 }
+
