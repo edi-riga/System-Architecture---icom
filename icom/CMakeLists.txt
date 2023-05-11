@@ -25,6 +25,26 @@ install(
     include/edi)
 
 
+# Include routines for generating packageConfig file
+include(CMakePackageConfigHelpers)
+
+# Generate compageConfig.cmake file, later used by the find_package() routine
+configure_package_config_file(
+  CMakeConfig.cmake.in
+  "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/icomConfig.cmake"
+  INSTALL_DESTINATION "lib/cmake/${PROJECT_NAME}"
+)
+
+# Install generated compageConfig.cmake file
+install(
+  FILES
+    "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/icomConfig.cmake"
+  DESTINATION
+    lib/cmake/icom
+  COMPONENT
+    dev)
+
+
 # Add library
 target_link_libraries(icom
   pthread)
