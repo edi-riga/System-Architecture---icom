@@ -358,11 +358,11 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
     link->recvHandler = link_recvHandler;
   }
 
-  if (flags & ICOM_FLAG_ZERO) {
-    printf("zero\n");
-  } else {
-    printf("not zero\n");
-  }
+  //if (flags & ICOM_FLAG_ZERO) {
+  //  printf("zero\n");
+  //} else {
+  //  printf("not zero\n");
+  //}
 
   pdata->fdAccepted = 0;
 
