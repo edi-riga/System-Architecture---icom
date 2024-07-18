@@ -6,8 +6,8 @@
 #include "string_parser.h"
 #include "notification.h"
 
-#ifndef _GNU_SOURCE
-static inline char* strchrnul(const char *ptr, char delimiter){
+#if !defined(_GNU_SOURCE) && !defined(__USE_MISC)
+static inline char* strchrnul(const char *ptr, char delimiter) {
   while(*ptr != delimiter && *ptr != '\0') ptr++;
   return (char*)ptr;
 }

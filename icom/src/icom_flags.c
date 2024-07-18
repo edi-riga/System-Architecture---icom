@@ -1,5 +1,6 @@
 #include <string.h>
 #include "icom_flags.h"
+#include "string_parser.h"
 #include "notification.h"
 
 static const char* icomFlagStrings[] = {

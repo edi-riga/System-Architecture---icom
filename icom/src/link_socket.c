@@ -475,7 +475,7 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
 
   /* set up handlers */
   link->recvHandler = link_recvHandler;
-  link->sendHandler = link_error;
+  link->sendHandler = (icomStatus_t(*)(icomLink_t*, void*, unsigned))link_error;
   link->autoSendAck = link_nop;
   link->autoRecvAck = link_nop;
   link->notifySendHandler = link_nop;
