@@ -6,12 +6,10 @@
 #include "string_parser.h"
 #include "notification.h"
 
-#if !defined(_GNU_SOURCE) && !defined(__USE_MISC)
-static inline char* strchrnul(const char *ptr, char delimiter) {
+static inline char* strchrnul_custom(const char *ptr, char delimiter) {
   while(*ptr != delimiter && *ptr != '\0') ptr++;
   return (char*)ptr;
 }
-#endif
 
 unsigned parser_getConnectionCount(const char *ptrStart){
   char *ptrStop;
@@ -20,7 +18,7 @@ unsigned parser_getConnectionCount(const char *ptrStart){
 
   do{
     // parse entry
-    ptrStop = strchrnul(ptrStart, ',');
+    ptrStop = strchrnul_custom(ptrStart, ',');
     char *tmp = strndup(ptrStart, ptrStop - ptrStart);
     ret = sscanf(tmp, "%*[^[][%d-%d]", &idFrom, &idTo);
     free(tmp);
@@ -59,7 +57,7 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
 
   do{
     // retreive candidate string
-    ptrStop = strchrnul(ptrStart, ',');
+    ptrStop = strchrnul_custom(ptrStart, ',');
     char *candidate = strndup(ptrStart, ptrStop - ptrStart);
     if(!candidate){
       _E("Failed to allocate memory");
@@ -146,7 +144,7 @@ int parser_initFields(char ***fieldArray, uint32_t *fieldCount, const char *ptrS
   ptrStop = (char*)ptrStart;
   i = 0;
   do{
-    ptrStop = strchrnul(ptrStart, separator);
+    ptrStop = strchrnul_custom(ptrStart, separator);
     (*fieldArray)[i] = strndup(ptrStart, ptrStop - ptrStart);
     if(!(*fieldArray)[i]){
       _E("Failed to allocate memory");
