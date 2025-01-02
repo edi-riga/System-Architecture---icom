@@ -42,7 +42,7 @@ icom_t *icom = icom_init("socket_tx|default|127.0.0.1:8889");
 
 // Initialize tcp socket connecting to (home) 127.0.0.1 IP address and 8889,8890,8891
 // ports using (pointer) zero-copy communication
-icom_t *icom = icom_init("socket_tx|zero|127.0.0.1:8889,8890,8891");
+icom_t *icom = icom_init("socket_tx|zero|127.0.0.1:[8889,8890,8891]");
 
 // Initialize tcp socket to any network interface and bind 8889,8890,8891 ports
 // while using (pointer) zero-copy communication with timeout detection
