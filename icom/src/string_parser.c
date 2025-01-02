@@ -11,6 +11,7 @@ static inline char* strchrnul_custom(const char *ptr, char delimiter) {
   return (char*)ptr;
 }
 
+
 unsigned parser_getConnectionCount(const char *ptrStart){
   char *ptrStop;
   int   strCount = 0;
@@ -22,8 +23,8 @@ unsigned parser_getConnectionCount(const char *ptrStart){
     char *tmp = strndup(ptrStart, ptrStop - ptrStart);
     ret = sscanf(tmp, "%*[^[][%d-%d]", &idFrom, &idTo);
     free(tmp);
-     
-    // update count 
+
+    // update count
     if(ret == 2)
       strCount += idTo - idFrom;
     strCount++;
@@ -31,17 +32,18 @@ unsigned parser_getConnectionCount(const char *ptrStart){
     // set up for next iteration
     ptrStart = ptrStop + 1;
   }while(*ptrStop != '\0');
-  
+
   return strCount;
 }
 
+
 int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrStart){
+
   char *ptrStop, *idStr;
-  int   idFrom, idTo, ret;
   unsigned strCurrent = 0;
 
-  // check if no string has been passed
-  if(ptrStart == NULL){
+  // check if no or empty string has been passed
+  if(ptrStart == NULL || ptrStart[0] == '\0'){
     *strArray = NULL;
     *strCount = 0;
     return -1;
@@ -56,8 +58,14 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
   }
 
   do{
-    // retreive candidate string
+    // retrieve candidate string
     ptrStop = strchrnul_custom(ptrStart, ',');
+    if(strchr(ptrStart, '[') && ptrStop > strchr(ptrStart, '[')){
+      while(strchr(ptrStart, ']') > ptrStop){
+        ptrStop = strchrnul_custom(ptrStop+1, ',');
+      }
+    }
+
     char *candidate = strndup(ptrStart, ptrStop - ptrStart);
     if(!candidate){
       _E("Failed to allocate memory");
@@ -66,35 +74,79 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
     }
 
     // parse the candidate string
-    ret = sscanf(candidate, "%m[^[][%d-%d]", &idStr, &idFrom, &idTo);
-    if(ret == EOF){
-      _E("Failed to parse string: %s", candidate);
-      free(candidate);
-      free(strArray);
-      return -1;
-    }
+    char *rangeStart = strchr(candidate, '[');
+    if(rangeStart != NULL){
 
-    // case with a simple string: "string"
-    if(ret == 1){
+      sscanf(candidate, "%m[^[]", &idStr);
+
+      if(strchr(rangeStart, '-')){
+
+        int idFrom, idTo;
+        sscanf(rangeStart, "[%d-%d]", &idFrom, &idTo);
+
+        for(int i = idFrom; i <= idTo; i++){
+          unsigned size = snprintf(NULL, 0, "%s%d", idStr, i) + 1;
+          (*strArray)[strCurrent] = malloc(size*sizeof(char));
+          if((*strArray)[strCurrent] == NULL){
+            _E("Failed to allocate memory");
+            for(int i = 0; i < strCurrent; i++){
+              free((*strArray)[i]);
+            }
+            *strCount = 0;
+            return -1;
+          }
+          sprintf((*strArray)[strCurrent], "%s%d", idStr, i);
+          strCurrent++;
+        }
+
+      }
+      else if(strchr(rangeStart, ',')){
+
+        char *tok = strtok(rangeStart+1, ",");
+        while(tok){
+          unsigned size = snprintf(NULL, 0, "%s%d", idStr, atoi(tok)) + 1;
+          (*strArray)[strCurrent] = malloc(size*sizeof(char));
+          if((*strArray)[strCurrent] == NULL){
+            _E("Failed to allocate memory");
+            for(int i = 0; i < strCurrent; i++){
+              free((*strArray)[i]);
+            }
+            *strCount = 0;
+            return -1;
+          }
+          sprintf((*strArray)[strCurrent], "%s%d", idStr, atoi(tok));
+          strCurrent++;
+
+          tok = strtok(NULL, ",");
+        }
+
+      }
+      else{
+
+        int id;
+        sscanf(rangeStart, "[%d]", &id);
+
+        unsigned size = snprintf(NULL, 0, "%s%d", idStr, id) + 1;
+        (*strArray)[strCurrent] = malloc(size*sizeof(char));
+        if((*strArray)[strCurrent] == NULL){
+          _E("Failed to allocate memory");
+          for(int i = 0; i < strCurrent; i++){
+            free((*strArray)[i]);
+          }
+          *strCount = 0;
+          return -1;
+        }
+        sprintf((*strArray)[strCurrent], "%s%d", idStr, id);
+        strCurrent++;
+
+      }
+
+    }
+    else{
       (*strArray)[strCurrent] = candidate;
       strCurrent++;
-      free(idStr);
       ptrStart = ptrStop + 1;
       continue;
-    }
-
-    // special case: "string[0]", basically treat as "string[0-0]"
-    if(ret == 2){
-      idTo = idFrom;
-    }
-
-    // case with advanced string: "string[0-1]"
-    for(int i = idFrom; i <= idTo; i++){
-      unsigned size = snprintf(NULL, 0, "%s%d", idStr, i) + 1;
-      (*strArray)[strCurrent] = (char*)malloc(size*sizeof(char));
-      // TODO: error checking
-      sprintf((*strArray)[strCurrent], "%s%d", idStr, i);
-      strCurrent++;
     }
 
     free(candidate);
@@ -108,8 +160,9 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
 }
 
 void parser_deinitStrArray(char **strArray, unsigned strCount){
-  for(int i=0; i<strCount; i++)
-    free((strArray)[i]);
+  for(int i = 0; i < strCount; i++){
+    free(strArray[i]);
+  }
   free(strArray);
 }
 
