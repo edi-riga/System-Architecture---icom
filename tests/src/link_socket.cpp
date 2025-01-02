@@ -70,8 +70,8 @@ TEST(link_socket, transfer_simple_default){
 TEST(link_socket, transfer_simple_default_reverse){
   for(uint32_t size=4; size<12; size++){
     link_common_simple(
-      "socket_rx|default|*:8889",
       "socket_tx|default|127.0.0.1:8889",
+      "socket_rx|default|*:8889",
       size);
   }
 }

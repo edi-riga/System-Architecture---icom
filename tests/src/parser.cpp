@@ -15,6 +15,18 @@ TEST(string_parser, null_string){
   EXPECT_EQ(strCount, 0);
 }
 
+TEST(string_parser, empty_string){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(ret, -1);
+  EXPECT_TRUE(strArray == NULL);
+  EXPECT_EQ(strCount, 0);
+}
+
 TEST(string_parser, single_string){
   char **strArray;
   unsigned strCount;
@@ -43,7 +55,6 @@ TEST(string_parser, single_string_brackets){
   parser_deinitStrArray(strArray, strCount);
 }
 
-
 TEST(string_parser, two_strings_comma){
   char **strArray;
   unsigned strCount;
@@ -59,7 +70,7 @@ TEST(string_parser, two_strings_comma){
   parser_deinitStrArray(strArray, strCount);
 }
 
-TEST(string_parser, two_strings_brackets){
+TEST(string_parser, two_strings_brackets_range){
   char **strArray;
   unsigned strCount;
   const char *str = "inproc[0-1]";
@@ -74,7 +85,7 @@ TEST(string_parser, two_strings_brackets){
   parser_deinitStrArray(strArray, strCount);
 }
 
-TEST(string_parser, three_strings_comma_brackets){
+TEST(string_parser, three_strings_comma_brackets_range){
   char **strArray;
   unsigned strCount;
   const char *str = "inproc0,inproc[1-2]";
@@ -90,7 +101,7 @@ TEST(string_parser, three_strings_comma_brackets){
   parser_deinitStrArray(strArray, strCount);
 }
 
-TEST(string_parser, three_strings_brackets_comma){
+TEST(string_parser, three_strings_brackets_range_comma){
   char **strArray;
   unsigned strCount;
   const char *str = "inproc[0-1],inproc2";
@@ -106,7 +117,7 @@ TEST(string_parser, three_strings_brackets_comma){
   parser_deinitStrArray(strArray, strCount);
 }
 
-TEST(string_parser, four_strings_brackets_comma){
+TEST(string_parser, four_strings_brackets_range_comma){
   char **strArray;
   unsigned strCount;
   const char *str = "inproc[0-1],inproc2,inproc3";
@@ -123,7 +134,7 @@ TEST(string_parser, four_strings_brackets_comma){
   parser_deinitStrArray(strArray, strCount);
 }
 
-TEST(string_parser, four_strings_comma_brackets){
+TEST(string_parser, four_strings_comma_brackets_range){
   char **strArray;
   unsigned strCount;
   const char *str = "inproc0,inproc1,inproc[2-3]";
@@ -140,10 +151,235 @@ TEST(string_parser, four_strings_comma_brackets){
   parser_deinitStrArray(strArray, strCount);
 }
 
-TEST(string_parser, five_strings_comma_brackets){
+TEST(string_parser, five_strings_comma_brackets_range){
   char **strArray;
   unsigned strCount;
   const char *str = "inproc[0-1],inproc2,inproc[3-4]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, two_strings_brackets_list){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0,1]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(2, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, three_strings_comma_brackets_list){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc0,inproc[1,2]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(3, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, three_strings_brackets_list_comma){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0,1],inproc2";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(3, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, four_strings_brackets_list_comma){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0,1],inproc2,inproc3";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(4, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, four_strings_comma_brackets_list){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc0,inproc1,inproc[2,3]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(4, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, five_strings_comma_brackets_list){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0,1],inproc2,inproc[3,4]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, five_strings_comma_brackets_list_brackets_range){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc0,inproc[1,2],inproc[3-4]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, five_strings_comma_brackets_range_brackets_list){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc0,inproc[1-2],inproc[3,4]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, five_strings_brackets_list_comma_brackets_range){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0,1],inproc2,inproc[3-4]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, five_strings_brackets_list_brackets_range_comma){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0,1],inproc[2-3],inproc4";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, five_strings_brackets_range_comma_brackets_list){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0-1],inproc2,inproc[3,4]";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, five_strings_brackets_range_brackets_list_comma){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0-1],inproc[2,3],inproc4";
+  int ret;
+
+  ret = parser_initStrArray(&strArray, &strCount, str);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(5, strCount);
+  EXPECT_STREQ(strArray[0], "inproc0");
+  EXPECT_STREQ(strArray[1], "inproc1");
+  EXPECT_STREQ(strArray[2], "inproc2");
+  EXPECT_STREQ(strArray[3], "inproc3");
+  EXPECT_STREQ(strArray[4], "inproc4");
+
+  parser_deinitStrArray(strArray, strCount);
+}
+
+TEST(string_parser, five_strings_brackets_list){
+  char **strArray;
+  unsigned strCount;
+  const char *str = "inproc[0,1,2,3,4]";
   int ret;
 
   ret = parser_initStrArray(&strArray, &strCount, str);
