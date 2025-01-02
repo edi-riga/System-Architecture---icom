@@ -40,7 +40,7 @@ unsigned parser_getConnectionCount(const char *ptrStart){
 int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrStart){
 
   char *ptrStop, *idStr;
-  unsigned strCurrent = 0;
+  int strCurrent = 0;
 
   // check if no or empty string has been passed
   if(ptrStart == NULL || ptrStart[0] == '\0'){
@@ -54,7 +54,8 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
   *strArray = (char**)malloc((*strCount)*sizeof(char*));
   if(*strArray == NULL){
     _E("Failed to allocate memory");
-    return -1;
+    goto error_malloc;
+    //return -1;
   }
 
   do{
@@ -75,10 +76,21 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
 
     // parse the candidate string
     char *rangeStart = strchr(candidate, '[');
-    if(rangeStart != NULL){
+
+    // simple non-range option
+    if(rangeStart == NULL){
+      (*strArray)[strCurrent] = candidate;
+      strCurrent++;
+      ptrStart = ptrStop + 1;
+      continue;
+    }
+
+    // a more complex range-based option
+    else {
 
       sscanf(candidate, "%m[^[]", &idStr);
 
+      // '-', dash-based range
       if(strchr(rangeStart, '-')){
 
         int idFrom, idTo;
@@ -89,17 +101,14 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
           (*strArray)[strCurrent] = malloc(size*sizeof(char));
           if((*strArray)[strCurrent] == NULL){
             _E("Failed to allocate memory");
-            for(int i = 0; i < strCurrent; i++){
-              free((*strArray)[i]);
-            }
-            *strCount = 0;
-            return -1;
+            goto error_malloc_member;
           }
           sprintf((*strArray)[strCurrent], "%s%d", idStr, i);
           strCurrent++;
         }
 
       }
+      // ',', comma-based range
       else if(strchr(rangeStart, ',')){
 
         char *tok = strtok(rangeStart+1, ",");
@@ -108,11 +117,7 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
           (*strArray)[strCurrent] = malloc(size*sizeof(char));
           if((*strArray)[strCurrent] == NULL){
             _E("Failed to allocate memory");
-            for(int i = 0; i < strCurrent; i++){
-              free((*strArray)[i]);
-            }
-            *strCount = 0;
-            return -1;
+            goto error_malloc_member;
           }
           sprintf((*strArray)[strCurrent], "%s%d", idStr, atoi(tok));
           strCurrent++;
@@ -121,6 +126,7 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
         }
 
       }
+      // range syntax, but with a single member
       else{
 
         int id;
@@ -130,23 +136,12 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
         (*strArray)[strCurrent] = malloc(size*sizeof(char));
         if((*strArray)[strCurrent] == NULL){
           _E("Failed to allocate memory");
-          for(int i = 0; i < strCurrent; i++){
-            free((*strArray)[i]);
-          }
-          *strCount = 0;
-          return -1;
+          goto error_malloc_member;
         }
         sprintf((*strArray)[strCurrent], "%s%d", idStr, id);
         strCurrent++;
 
       }
-
-    }
-    else{
-      (*strArray)[strCurrent] = candidate;
-      strCurrent++;
-      ptrStart = ptrStop + 1;
-      continue;
     }
 
     free(candidate);
@@ -157,6 +152,18 @@ int parser_initStrArray(char ***strArray, unsigned *strCount, const char *ptrSta
   } while(*ptrStop != '\0');
 
   return 0;
+
+
+error_malloc_member:
+  for(;strCurrent > 0; strCurrent--){
+    free((*strArray)[strCurrent]);
+  }
+
+error_malloc:
+  free(*strArray);
+  *strCount = 0;
+
+  return -1;
 }
 
 void parser_deinitStrArray(char **strArray, unsigned strCount){
