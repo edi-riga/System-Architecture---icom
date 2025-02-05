@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <netinet/tcp.h>
 
 #include "icom.h"
 #include "icom_type.h"
@@ -328,6 +329,15 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
     goto failure_inet_aton;
   }
 
+  /* set TCP protocol option TCP_NODELAY, when sending zero copy buffer */
+  if (flags & ICOM_FLAG_ZERO) {
+    int no_delay = 1;
+
+    if( setsockopt(pdata->fd, IPPROTO_TCP, TCP_NODELAY, &no_delay, sizeof(no_delay)) < 0){
+      _SW("Failed to set tcp_nodelay in send");
+    }
+  }
+
   /* set timeout (if requested) */
   if(flags & ICOM_FLAG_TIMEOUT){
     struct timeval timeout;
@@ -445,6 +455,15 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
     _E("Failed to convert IP address");
     ret = (icomStatus_t)ICOM_EINVAL;
     goto failure_inet_aton;
+  }
+
+  /* set TCP protocol option TCP_NODELAY, when notifying with zero copy */
+  if (flags & ICOM_FLAG_ZERO) {
+    int no_delay = 1;
+
+    if( setsockopt(pdata->fd, IPPROTO_TCP, TCP_NODELAY, &no_delay, sizeof(no_delay)) < 0){
+      _SW("Failed to set tcp_nodelay in recv");
+    }
   }
 
   /* set timeout (if requested) */
