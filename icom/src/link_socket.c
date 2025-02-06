@@ -26,7 +26,7 @@ static icomStatus_t link_error(icomLink_t *link, void **buf, unsigned *bufSize) 
 static icomStatus_t link_accept(icomLink_t *link, void **buf, unsigned *bufSize) {
   /* Retreive private data structure */
   icomLinkSocket_t *pdata = link->pdata;
-  
+
   /* Connect to the */
   if (!pdata->fdAccepted) {  // TEMP
     pdata->fdAccepted = accept(pdata->fd, NULL, NULL);
@@ -329,13 +329,10 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
     goto failure_inet_aton;
   }
 
-  /* set TCP protocol option TCP_NODELAY, when sending zero copy buffer */
-  if (flags & ICOM_FLAG_ZERO) {
-    int no_delay = 1;
-
-    if( setsockopt(pdata->fd, IPPROTO_TCP, TCP_NODELAY, &no_delay, sizeof(no_delay)) < 0){
-      _SW("Failed to set tcp_nodelay in send");
-    }
+  /* set TCP protocol's TCP_NODELAY option */
+  int no_delay = 1;
+  if(setsockopt(pdata->fd, SOL_TCP, TCP_NODELAY, &no_delay, sizeof(no_delay)) < 0){
+    _SW("Failed to set TCP_NODELAY option");
   }
 
   /* set timeout (if requested) */
@@ -350,7 +347,7 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
       _SW("Failed to set socket timeout option");
     }
   }
-  
+
   /* set up handlers */
   link->sendHandler = link_sendHandler;
   link->recvHandler = link_error;
@@ -364,7 +361,7 @@ icomStatus_t icom_initSocketConnect(icomLink_t *link, icomType_t type, const cha
   } else if (flags & ICOM_FLAG_NOTIFY) {
     link->notifyRecvHandler = link_recvAck;
     link->notifySendHandler = link_error;
-  } else { 
+  } else {
     link->recvHandler = link_recvHandler;
   }
 
@@ -457,13 +454,10 @@ icomStatus_t icom_initSocketBind(icomLink_t *link, icomType_t type, const char *
     goto failure_inet_aton;
   }
 
-  /* set TCP protocol option TCP_NODELAY, when notifying with zero copy */
-  if (flags & ICOM_FLAG_ZERO) {
-    int no_delay = 1;
-
-    if( setsockopt(pdata->fd, IPPROTO_TCP, TCP_NODELAY, &no_delay, sizeof(no_delay)) < 0){
-      _SW("Failed to set tcp_nodelay in recv");
-    }
+  /* set TCP protocol's TCP_NODELAY option */
+  int no_delay = 1;
+  if(setsockopt(pdata->fd, SOL_TCP, TCP_NODELAY, &no_delay, sizeof(no_delay)) < 0){
+    _SW("Failed to set TCP_NODELAY option");
   }
 
   /* set timeout (if requested) */
