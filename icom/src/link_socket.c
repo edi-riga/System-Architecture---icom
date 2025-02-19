@@ -191,6 +191,18 @@ static icomStatus_t link_connect(icomLink_t *link, void **buf, unsigned *bufSize
       }
     }
     pdata->fdAccepted = pdata->fd;
+
+    if (link->flags & ICOM_FLAG_TIMEOUT) {
+      struct timeval timeout;
+      timeout.tv_sec  = g_timeout_usec/1000000;
+      timeout.tv_usec = g_timeout_usec%1000000;
+      if( setsockopt(pdata->fdAccepted, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0){
+        _SW("Failed to set socket timeout option");
+      }
+      if( setsockopt(pdata->fdAccepted, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0){
+        _SW("Failed to set socket timeout option");
+      }
+    }
   }
 
   return ICOM_SUCCESS;
